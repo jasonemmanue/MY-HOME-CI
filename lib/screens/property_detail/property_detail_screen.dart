@@ -506,12 +506,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Messagerie bientot disponible'),
-                          ),
-                        );
+                        Navigator.pushNamed(context, '/chat-detail');
                       },
                       icon: const Icon(Icons.chat_bubble_outline,
                           size: 18),

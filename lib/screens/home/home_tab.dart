@@ -127,7 +127,11 @@ class _HomeTabState extends State<HomeTab> {
                   property: property,
                   variant: PropertyCardVariant.horizontal,
                   onTap: () {
-                    // TODO: naviguer vers le detail
+                    Navigator.pushNamed(
+                      context,
+                      '/property-detail',
+                      arguments: property,
+                    );
                   },
                 );
               },
