@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node (docx generator)
+node_modules/
+
+# Generated PDF (regenerable)
+CAHIER_DES_CHARGES_MY_HOME_CI.pdf
