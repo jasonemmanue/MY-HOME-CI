@@ -4,7 +4,7 @@ class AppConstants {
   AppConstants._();
 
   // ── Application ──
-  static const String appName = 'MY HOME CI';
+  static const String appName = 'My Home CI';
   static const String slogan = 'Trouvez votre chez-vous';
   static const String appVersion = '1.0.0';
 
@@ -96,7 +96,7 @@ class AppConstants {
 
   // ── Placeholder image ──
   static const String placeholderImage =
-      'https://via.placeholder.com/600x400/2E7D5B/FFFFFF?text=MY+HOME+CI';
+      'https://via.placeholder.com/600x400/2E7D5B/FFFFFF?text=My+Home+CI';
 
   // ── Limites ──
   static const int maxPhotos = 10;

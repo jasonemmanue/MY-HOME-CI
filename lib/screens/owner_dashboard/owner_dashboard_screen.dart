@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/constants.dart';
+import '../../config/routes.dart';
 import '../../config/theme.dart';
 import '../../models/property.dart';
 
@@ -115,7 +116,7 @@ class OwnerDashboardScreen extends StatelessWidget {
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: () {
-          // Navigation vers PublishPropertyScreen
+          Navigator.pushNamed(context, AppRoutes.publish);
         },
         icon: const Icon(Icons.add_circle_outline, size: 22),
         label: const Text('Publier une annonce'),

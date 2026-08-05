@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/constants.dart';
+import '../../config/routes.dart';
 import '../../config/theme.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -86,14 +87,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           icon: Icons.dashboard_outlined,
           title: 'Mon espace proprietaire',
           onTap: () {
-            // Navigation vers OwnerDashboardScreen
+            Navigator.pushNamed(context, AppRoutes.ownerDashboard);
           },
         ),
         _buildMenuItem(
           icon: Icons.favorite_outline,
           title: 'Mes favoris',
           onTap: () {
-            // Navigation vers favoris
+            Navigator.pushNamed(context, AppRoutes.favorites);
           },
         ),
         _buildMenuItem(

@@ -81,7 +81,7 @@ class _AuthScreenState extends State<AuthScreen>
 
               Center(
                 child: Text(
-                  'MY HOME CI',
+                  'My Home CI',
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
