@@ -56,11 +56,9 @@ class _AuthScreenState extends State<AuthScreen>
               // -- Logo --
               Center(
                 child: Container(
-                  width: 60,
-                  height: 60,
+                  width: 70,
+                  height: 70,
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryGreen,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
                     boxShadow: [
                       BoxShadow(
                         color: AppTheme.primaryGreen.withValues(alpha: 0.25),
@@ -69,10 +67,12 @@ class _AuthScreenState extends State<AuthScreen>
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.home_rounded,
-                    size: 32,
-                    color: Colors.white,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),
