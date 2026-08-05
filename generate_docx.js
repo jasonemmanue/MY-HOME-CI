@@ -351,9 +351,9 @@ const logoParagraph = logoBuffer
     });
 
 const doc = new Document({
-  creator: 'MY HOME CI',
-  title: 'Cahier des Charges - MY HOME CI',
-  description: 'Cahier des charges application mobile MY HOME CI',
+  creator: 'My Home CI',
+  title: 'Cahier des Charges - My Home CI',
+  description: 'Cahier des charges application mobile My Home CI',
   numbering: {
     config: [
       {
@@ -414,7 +414,7 @@ const doc = new Document({
         }),
         new Paragraph({
           alignment: AlignmentType.CENTER, spacing: { after: 200 },
-          children: [new TextRun({ text: 'MY HOME CI', bold: true, size: 52, color: PRIMARY, font: 'Calibri' })],
+          children: [new TextRun({ text: 'My Home CI', bold: true, size: 52, color: PRIMARY, font: 'Calibri' })],
         }),
         new Paragraph({
           alignment: AlignmentType.CENTER, spacing: { after: 400 },
@@ -513,7 +513,7 @@ const doc = new Document({
           children: [
             new Paragraph({
               alignment: AlignmentType.RIGHT,
-              children: [new TextRun({ text: 'MY HOME CI — Cahier des Charges', size: 16, color: GRAY, font: 'Calibri', italics: true })],
+              children: [new TextRun({ text: 'My Home CI — Cahier des Charges', size: 16, color: GRAY, font: 'Calibri', italics: true })],
             }),
           ],
         }),
@@ -539,11 +539,11 @@ const doc = new Document({
         horizontalRule(SECONDARY),
 
         new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: '1.1 Presentation generale du projet', bold: true, size: 28, color: '1B5E3B', font: 'Calibri' })] }),
-        infoBox('MY HOME CI est une application mobile dediee au marche locatif ivoirien. Elle connecte directement les proprietaires de logements avec les personnes cherchant a louer, en eliminant les intermediaires et en offrant une experience moderne, geolocalisee et securisee.'),
+        infoBox('My Home CI est une application mobile dediee au marche locatif ivoirien. Elle connecte directement les proprietaires de logements avec les personnes cherchant a louer, en eliminant les intermediaires et en offrant une experience moderne, geolocalisee et securisee.'),
         emptyPara(60),
 
         new Paragraph({ heading: HeadingLevel.HEADING_3, children: [new TextRun({ text: '1.1.1 Scenario initial', bold: true, size: 24, color: DARK, font: 'Calibri' })] }),
-        textPara('Le marche immobilier en Cote d\'Ivoire souffre d\'un manque criant de digitalisation dans le segment locatif. Les chercheurs de logements dependent encore largement du bouche-a-oreille, des pancartes "A Louer" et des agences physiques qui prelevent des frais importants. Les proprietaires, de leur cote, peinent a trouver des locataires fiables sans passer par ces intermediaires couteux. MY HOME CI vise a combler ce vide en proposant une plateforme numerique gratuite, intuitive et centree sur la mise en relation directe.'),
+        textPara('Le marche immobilier en Cote d\'Ivoire souffre d\'un manque criant de digitalisation dans le segment locatif. Les chercheurs de logements dependent encore largement du bouche-a-oreille, des pancartes "A Louer" et des agences physiques qui prelevent des frais importants. Les proprietaires, de leur cote, peinent a trouver des locataires fiables sans passer par ces intermediaires couteux. My Home CI vise a combler ce vide en proposant une plateforme numerique gratuite, intuitive et centree sur la mise en relation directe.'),
 
         new Paragraph({ heading: HeadingLevel.HEADING_3, children: [new TextRun({ text: '1.1.2 Objet de l\'application', bold: true, size: 24, color: DARK, font: 'Calibri' })] }),
         textPara('L\'application a pour objet principal de :'),
@@ -553,7 +553,7 @@ const doc = new Document({
         bulletPoint('Offrir une experience de recherche enrichie grace a la geolocalisation, aux filtres avances et aux alertes personnalisees'),
         bulletPoint('Fournir des informations contextuelles sur les quartiers (commodites, transports, securite)'),
         emptyPara(60),
-        infoBox('Important : MY HOME CI ne gere aucun paiement ni transaction financiere. La plateforme se concentre exclusivement sur la mise en relation.', 'FEF3C7', SECONDARY),
+        infoBox('Important : My Home CI ne gere aucun paiement ni transaction financiere. La plateforme se concentre exclusivement sur la mise en relation.', 'FEF3C7', SECONDARY),
 
         new Paragraph({ heading: HeadingLevel.HEADING_3, children: [new TextRun({ text: '1.1.3 Evolutions envisagees', bold: true, size: 24, color: DARK, font: 'Calibri' })] }),
         bulletBoldNormal('Phase 1 (MVP) : ', 'Recherche de logements, carte interactive, chat proprietaire-locataire, profils, favoris'),
@@ -569,7 +569,7 @@ const doc = new Document({
           [
             ['Locataire (Visiteur)', 'Toute personne 18+ cherchant un logement en Cote d\'Ivoire', 'Consultation d\'annonces, geolocalisation, messagerie, favoris, partage reseaux sociaux, alertes'],
             ['Proprietaire', 'Proprietaire individuel ou agence immobiliere', 'Creation de compte, publication d\'annonces, gestion de biens, reception de messages, statistiques basiques'],
-            ['Administrateur', 'Equipe interne MY HOME CI', 'Moderation, gestion des utilisateurs, analytics, signalements'],
+            ['Administrateur', 'Equipe interne My Home CI', 'Moderation, gestion des utilisateurs, analytics, signalements'],
           ],
           [2000, 3000, 4000]
         ),
@@ -593,7 +593,7 @@ const doc = new Document({
         horizontalRule(SECONDARY),
 
         new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: '2.1 Types de monetisation', bold: true, size: 28, color: '1B5E3B', font: 'Calibri' })] }),
-        textPara('MY HOME CI repose sur un modele economique freemium combine a la publicite in-app. Aucune commission sur transaction n\'est prelevee (pas de paiement integre).'),
+        textPara('My Home CI repose sur un modele economique freemium combine a la publicite in-app. Aucune commission sur transaction n\'est prelevee (pas de paiement integre).'),
 
         new Paragraph({ heading: HeadingLevel.HEADING_3, children: [new TextRun({ text: '2.1.1 Grille tarifaire', bold: true, size: 24, color: DARK, font: 'Calibri' })] }),
         createTable(
@@ -645,13 +645,13 @@ const doc = new Document({
         // 2.2
         new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: '2.2 Analyse concurrentielle', bold: true, size: 28, color: '1B5E3B', font: 'Calibri' })] }),
         createTable(
-          ['Concurrent', 'Forces', 'Faiblesses face a MY HOME CI'],
+          ['Concurrent', 'Forces', 'Faiblesses face a My Home CI'],
           [
             ['Jumia House CI', 'Presence panafricaine, notoriete', 'Interface peu mobile-first, pas de chat integre'],
             ['CoinAfrique', 'Marketplace generale populaire', 'Pas specialise immobilier, pas de carte'],
             ['Groupes Facebook', 'Grande audience, gratuit', 'Pas de filtres, pas de geolocalisation, arnaques'],
             ['Agences physiques', 'Confiance, visites physiques', 'Frais eleves, pas digital'],
-            ['MY HOME CI', 'Mobile-first, carte, chat direct, gratuit, verifie', 'A construire'],
+            ['My Home CI', 'Mobile-first, carte, chat direct, gratuit, verifie', 'A construire'],
           ],
           [2500, 3000, 3500]
         ),
@@ -724,7 +724,7 @@ const doc = new Document({
         // Ecrans 1-10
         ...[
           { title: '4.1 Ecran 1 — Splash Screen & Onboarding', items: [
-            'Logo anime MY HOME CI avec slogan "Trouvez votre chez-vous"',
+            'Logo anime My Home CI avec slogan "Trouvez votre chez-vous"',
             '3 pages d\'onboarding illustrees (Explorez / Contactez / Sauvegardez)',
             'Bouton "Commencer" / "Passer"',
             'Affiche une seule fois au premier lancement',
@@ -975,7 +975,7 @@ const doc = new Document({
         horizontalRule(SECONDARY),
 
         new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: '8.1 Coeur de metier', bold: true, size: 28, color: '1B5E3B', font: 'Calibri' })] }),
-        textPara('MY HOME CI est une plateforme de mise en relation locative mobile-first dediee au marche ivoirien. Elle connecte proprietaires et chercheurs de logements dans un ecosysteme simple, transparent et gratuit, sans intermediaires ni frais de commission.'),
+        textPara('My Home CI est une plateforme de mise en relation locative mobile-first dediee au marche ivoirien. Elle connecte proprietaires et chercheurs de logements dans un ecosysteme simple, transparent et gratuit, sans intermediaires ni frais de commission.'),
 
         new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: '8.2 Originalite et differenciation', bold: true, size: 28, color: '1B5E3B', font: 'Calibri' })] }),
         bulletBoldNormal('Zero intermediaire : ', 'Mise en relation directe proprietaire-locataire, aucun frais cache'),
@@ -1029,7 +1029,7 @@ const doc = new Document({
         ...[
           {
             num: '1', name: 'Splash Screen & Onboarding',
-            role: 'Premier contact de l\'utilisateur avec l\'application. L\'ecran Splash affiche le logo et le slogan MY HOME CI pendant le chargement. L\'Onboarding (3 pages) presente les fonctionnalites cles : recherche geolocalisee, contact direct proprietaire, et sauvegarde de favoris. Il guide l\'utilisateur vers l\'inscription ou le mode invite.',
+            role: 'Premier contact de l\'utilisateur avec l\'application. L\'ecran Splash affiche le logo et le slogan My Home CI pendant le chargement. L\'Onboarding (3 pages) presente les fonctionnalites cles : recherche geolocalisee, contact direct proprietaire, et sauvegarde de favoris. Il guide l\'utilisateur vers l\'inscription ou le mode invite.',
           },
           {
             num: '2', name: 'Authentification (Connexion / Inscription)',
@@ -1082,11 +1082,167 @@ const doc = new Document({
           }),
         ]),
 
+        // ── SECTION 10bis : Maquettes Admin (Dashboard Web) ──
+        new Paragraph({ children: [new PageBreak()] }),
+        new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: '10bis. Dashboard Administrateur — Captures d\'ecran (Web)', bold: true, size: 36, color: PRIMARY, font: 'Calibri' })] }),
+        horizontalRule(SECONDARY),
+        infoBox('Cette section presente les maquettes du panneau d\'administration web (My Home CI Admin), developpe en Next.js. Ce dashboard permet la gestion complete de la plateforme : utilisateurs, annonces, conversations, signalements et parametres. Les captures seront realisees depuis un navigateur desktop.'),
+        emptyPara(100),
+
+        ...[
+          {
+            num: '1', name: 'Page de connexion Admin',
+            role: 'Point d\'entree du panneau d\'administration. Formulaire de connexion securise avec email et mot de passe, logo de l\'application, et design coherent avec la charte graphique. Acces reserve aux administrateurs de la plateforme.',
+          },
+          {
+            num: '2', name: 'Tableau de bord (Dashboard)',
+            role: 'Vue d\'ensemble de l\'activite de la plateforme. Affiche les statistiques cles (utilisateurs, annonces, conversations, signalements) avec indicateurs de tendance. Graphique d\'activite des 7 derniers jours, tableau des annonces en attente de validation, et liste des derniers utilisateurs inscrits.',
+          },
+          {
+            num: '3', name: 'Gestion des annonces',
+            role: 'Liste complete de toutes les annonces avec filtres par statut (en attente, actives, rejetees, archivees). Recherche par titre ou quartier, tableau detaille avec proprietaire, prix, statut et actions. Panneau lateral de detail avec validation, rejet, mise en avant ou suppression.',
+          },
+          {
+            num: '4', name: 'Gestion des utilisateurs',
+            role: 'Repertoire de tous les utilisateurs de la plateforme avec filtres par role (locataire, proprietaire) et statut (verifie, suspendu). Tableau avec avatar, informations de contact, role, date d\'inscription et actions de moderation (verification, suspension, suppression).',
+          },
+          {
+            num: '5', name: 'Suivi des conversations',
+            role: 'Visualisation de toutes les conversations entre utilisateurs. Liste avec apercu du dernier message, participants, logement concerne et indicateur de messages non lus. Panneau de lecture des messages pour la moderation du contenu.',
+          },
+          {
+            num: '6', name: 'Gestion des signalements',
+            role: 'Interface de moderation des signalements effectues par les utilisateurs. Filtres par statut (en attente, traites, rejetes), tableau avec motif, annonce signalee, signaleur et date. Actions : marquer comme traite, rejeter le signalement, ou supprimer l\'annonce concernee.',
+          },
+          {
+            num: '7', name: 'Parametres de la plateforme',
+            role: 'Configuration generale de la plateforme : informations (nom, email de support), moderation (approbation manuelle, filtrage automatique), notifications (emails admin, alertes signalements). Zone de danger pour la purge des donnees et la maintenance.',
+          },
+        ].flatMap(s => [
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun({ text: '10bis.' + s.num + ' ' + s.name, bold: true, size: 28, color: '1B5E3B', font: 'Calibri' })],
+          }),
+          emptyPara(40),
+          // Cadre ecran desktop (rectangle paysage au lieu de telephone)
+          new Table({
+            width: { size: 9000, type: WidthType.DXA },
+            columnWidths: [9000],
+            rows: [
+              // Barre de navigateur
+              new TableRow({
+                height: { value: 300, rule: docx.HeightRule.EXACT },
+                children: [
+                  new TableCell({
+                    width: { size: 9000, type: WidthType.DXA },
+                    shading: { type: ShadingType.CLEAR, fill: '2D2D2D' },
+                    borders: {
+                      top: { style: BorderStyle.SINGLE, size: 4, color: '333333' },
+                      left: { style: BorderStyle.SINGLE, size: 4, color: '333333' },
+                      right: { style: BorderStyle.SINGLE, size: 4, color: '333333' },
+                      bottom: { style: BorderStyle.NONE },
+                    },
+                    children: [
+                      new Paragraph({
+                        alignment: AlignmentType.LEFT,
+                        spacing: { before: 20, after: 20 },
+                        indent: { left: 200 },
+                        children: [
+                          new TextRun({ text: '●  ●  ●   ', size: 14, color: 'AAAAAA' }),
+                          new TextRun({ text: '  localhost:3000/dashboard', size: 14, color: '999999' }),
+                        ],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+              // Zone de capture ecran
+              new TableRow({
+                height: { value: 4000, rule: docx.HeightRule.ATLEAST },
+                children: [
+                  new TableCell({
+                    width: { size: 9000, type: WidthType.DXA },
+                    shading: { type: ShadingType.CLEAR, fill: PHONE_BG },
+                    borders: {
+                      top: { style: BorderStyle.NONE },
+                      bottom: { style: BorderStyle.SINGLE, size: 4, color: '333333' },
+                      left: { style: BorderStyle.SINGLE, size: 4, color: '333333' },
+                      right: { style: BorderStyle.SINGLE, size: 4, color: '333333' },
+                    },
+                    verticalAlign: docx.VerticalAlign.CENTER,
+                    children: [
+                      new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { before: 400, after: 200 },
+                        children: [new TextRun({ text: '🖥️', size: 56 })],
+                      }),
+                      new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { before: 100, after: 100 },
+                        children: [
+                          new TextRun({ text: 'Capture Admin ' + s.num, bold: true, size: 22, color: PRIMARY, font: 'Calibri' }),
+                        ],
+                      }),
+                      new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { before: 60, after: 200 },
+                        children: [
+                          new TextRun({ text: '[Inserer la capture d\'ecran de ' + s.name + ' ici]', italic: true, size: 18, color: GRAY, font: 'Calibri' }),
+                        ],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+          emptyPara(60),
+          // Description du role
+          new Table({
+            width: { size: 9000, type: WidthType.DXA },
+            columnWidths: [9000],
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    width: { size: 9000, type: WidthType.DXA },
+                    shading: { type: ShadingType.CLEAR, fill: 'F8FAF9' },
+                    borders: {
+                      top: { style: BorderStyle.NONE },
+                      bottom: { style: BorderStyle.NONE },
+                      left: { style: BorderStyle.SINGLE, size: 6, color: PRIMARY },
+                      right: { style: BorderStyle.NONE },
+                    },
+                    children: [
+                      new Paragraph({
+                        spacing: { before: 80, after: 40 },
+                        indent: { left: 200 },
+                        children: [new TextRun({ text: 'Role de la page :', bold: true, size: 20, color: PRIMARY, font: 'Calibri' })],
+                      }),
+                      new Paragraph({
+                        spacing: { before: 40, after: 80 },
+                        indent: { left: 200, right: 200 },
+                        children: [new TextRun({ text: s.role, size: 20, color: DARK, font: 'Calibri' })],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+          emptyPara(60),
+          new Paragraph({
+            border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' } },
+            spacing: { before: 40, after: 120 },
+            children: [],
+          }),
+        ]),
+
         // ── SECTION 11 : Conclusion ──
         new Paragraph({ children: [new PageBreak()] }),
         new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: '11. Conclusion', bold: true, size: 36, color: PRIMARY, font: 'Calibri' })] }),
         horizontalRule(SECONDARY),
-        textPara('Le present cahier des charges definit les bases solides pour le developpement de MY HOME CI, plateforme de mise en relation locative mobile dediee a la Cote d\'Ivoire.'),
+        textPara('Le present cahier des charges definit les bases solides pour le developpement de My Home CI, plateforme de mise en relation locative mobile dediee a la Cote d\'Ivoire.'),
         emptyPara(60),
         textPara('Les points cles a retenir sont :', { bold: true }),
         bulletPoint('Application mobile Android & iOS, cross-platform Flutter (smartphone + tablette)'),
@@ -1143,7 +1299,7 @@ const doc = new Document({
         createTable(
           ['Champ', 'Valeur renseignee'],
           [
-            ['Nom du projet', 'MY HOME CI'],
+            ['Nom du projet', 'My Home CI'],
             ['Services/produits', 'Mise en relation locative (immobilier)'],
             ['Axes de developpement', 'Recherche logements, carte, messagerie, favoris, alertes'],
             ['Concurrent principal', 'Jumia House CI, CoinAfrique, Groupes Facebook'],
