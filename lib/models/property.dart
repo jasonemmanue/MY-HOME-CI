@@ -1,3 +1,45 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../utils/geohash.dart';
+
+/// Cycle de vie d'une annonce.
+///
+/// `pending` existe parce que la moderation est a priori : une annonce publiee
+/// n'est visible du public qu'apres validation admin. C'est le prix a payer
+/// pour la promesse « moins d'arnaques » du cahier des charges.
+enum PropertyStatus {
+  draft,
+  pending,
+  active,
+  rented,
+  archived,
+  rejected;
+
+  static PropertyStatus fromString(String? value) {
+    return PropertyStatus.values.firstWhere(
+      (s) => s.name == value,
+      orElse: () => PropertyStatus.draft,
+    );
+  }
+
+  String get label {
+    switch (this) {
+      case PropertyStatus.draft:
+        return 'Brouillon';
+      case PropertyStatus.pending:
+        return 'En attente';
+      case PropertyStatus.active:
+        return 'Active';
+      case PropertyStatus.rented:
+        return 'Louee';
+      case PropertyStatus.archived:
+        return 'Archivee';
+      case PropertyStatus.rejected:
+        return 'Rejetee';
+    }
+  }
+}
+
 class Property {
   final String id;
   final String title;
@@ -7,6 +49,16 @@ class Property {
   final String address;
   final String quarter;
   final String city;
+
+  /// Coordonnees du bien. Nullable : un brouillon peut ne pas encore etre
+  /// localise, mais la publication les exige (cf. [isPublishable]).
+  final double? latitude;
+  final double? longitude;
+
+  /// Prefixe geospatial derive de (latitude, longitude). Recalcule a chaque
+  /// ecriture par [copyWith] / [toFirestore] — jamais saisi a la main.
+  final String? geohash;
+
   final double surface;
   final int rooms;
   final int bathrooms;
@@ -14,12 +66,30 @@ class Property {
   final bool isFurnished;
   final List<String> equipment;
   final List<String> images;
+
   final String ownerId;
   final String ownerName;
-  final String? ownerPhone;
+  final String? ownerPhotoUrl;
+  final bool ownerIsVerified;
+
   final DateTime createdAt;
-  final bool isActive;
+  final DateTime? updatedAt;
+  final DateTime? publishedAt;
+
+  final PropertyStatus status;
   final int views;
+  final int favoritesCount;
+
+  /// Fin de la mise en avant payante. Ecrit uniquement par les Cloud
+  /// Functions apres paiement — les regles Firestore interdisent au client
+  /// d'y toucher.
+  final DateTime? boostedUntil;
+
+  /// Motif de rejet renseigne par la moderation, affiche au proprietaire.
+  final String? rejectionReason;
+
+  /// Mots-cles minuscules pour la recherche `array-contains`.
+  final List<String> searchKeywords;
 
   const Property({
     required this.id,
@@ -30,6 +100,9 @@ class Property {
     required this.address,
     required this.quarter,
     required this.city,
+    this.latitude,
+    this.longitude,
+    this.geohash,
     required this.surface,
     required this.rooms,
     required this.bathrooms,
@@ -39,173 +112,258 @@ class Property {
     this.images = const [],
     required this.ownerId,
     required this.ownerName,
-    this.ownerPhone,
+    this.ownerPhotoUrl,
+    this.ownerIsVerified = false,
     required this.createdAt,
-    this.isActive = true,
+    this.updatedAt,
+    this.publishedAt,
+    this.status = PropertyStatus.draft,
     this.views = 0,
+    this.favoritesCount = 0,
+    this.boostedUntil,
+    this.rejectionReason,
+    this.searchKeywords = const [],
   });
 
-  static List<Property> mockProperties = [
-    Property(
-      id: 'prop_1',
-      title: 'Appartement 3 pieces - Cocody',
-      type: 'Appartement',
-      description:
-          'Bel appartement lumineux de 3 pieces situe dans un quartier calme de Cocody. Proche des commodites, ecoles et transports.',
-      price: 250000,
-      address: 'Rue des Jardins, Cocody',
-      quarter: 'Cocody',
+  // ── Etats derives ───────────────────────────────────────────────────────
+
+  bool get isActive => status == PropertyStatus.active;
+
+  bool get isBoosted =>
+      boostedUntil != null && boostedUntil!.isAfter(DateTime.now());
+
+  bool get hasLocation => latitude != null && longitude != null;
+
+  /// Une annonce ne part en moderation que si elle est complete. Verifie ici
+  /// plutot que dans l'ecran : la meme regle sert au brouillon repris plus tard.
+  bool get isPublishable =>
+      title.trim().length >= 5 &&
+      description.trim().length >= 20 &&
+      price > 0 &&
+      hasLocation &&
+      images.isNotEmpty &&
+      quarter.isNotEmpty;
+
+  /// Premiere image, ou null si l'annonce n'en a pas encore.
+  String? get coverImage => images.isEmpty ? null : images.first;
+
+  // ── Serialisation ───────────────────────────────────────────────────────
+
+  factory Property.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data() ?? const <String, dynamic>{};
+    return Property(
+      id: doc.id,
+      title: d['title'] as String? ?? '',
+      type: d['type'] as String? ?? '',
+      description: d['description'] as String? ?? '',
+      price: (d['price'] as num?)?.toInt() ?? 0,
+      address: d['address'] as String? ?? '',
+      quarter: d['quarter'] as String? ?? '',
+      city: d['city'] as String? ?? 'Abidjan',
+      latitude: (d['latitude'] as num?)?.toDouble(),
+      longitude: (d['longitude'] as num?)?.toDouble(),
+      geohash: d['geohash'] as String?,
+      surface: (d['surface'] as num?)?.toDouble() ?? 0,
+      rooms: (d['rooms'] as num?)?.toInt() ?? 0,
+      bathrooms: (d['bathrooms'] as num?)?.toInt() ?? 0,
+      floor: (d['floor'] as num?)?.toInt() ?? 0,
+      isFurnished: d['isFurnished'] as bool? ?? false,
+      equipment: List<String>.from(d['equipment'] as List? ?? const []),
+      images: List<String>.from(d['images'] as List? ?? const []),
+      ownerId: d['ownerId'] as String? ?? '',
+      ownerName: d['ownerName'] as String? ?? '',
+      ownerPhotoUrl: d['ownerPhotoUrl'] as String?,
+      ownerIsVerified: d['ownerIsVerified'] as bool? ?? false,
+      createdAt: _toDate(d['createdAt']) ?? DateTime.now(),
+      updatedAt: _toDate(d['updatedAt']),
+      publishedAt: _toDate(d['publishedAt']),
+      status: PropertyStatus.fromString(d['status'] as String?),
+      views: (d['views'] as num?)?.toInt() ?? 0,
+      favoritesCount: (d['favoritesCount'] as num?)?.toInt() ?? 0,
+      boostedUntil: _toDate(d['boostedUntil']),
+      rejectionReason: d['rejectionReason'] as String?,
+      searchKeywords:
+          List<String>.from(d['searchKeywords'] as List? ?? const []),
+    );
+  }
+
+  /// Payload d'ecriture.
+  ///
+  /// `views`, `favoritesCount` et `boostedUntil` sont volontairement absents :
+  /// les compteurs se manipulent par `FieldValue.increment` et le boost est
+  /// pose par le serveur. Les inclure ici ecraserait des valeurs concurrentes.
+  Map<String, dynamic> toFirestore() {
+    final coords = (latitude != null && longitude != null)
+        ? Geohash.encode(latitude!, longitude!)
+        : null;
+
+    return {
+      'title': title,
+      'type': type,
+      'description': description,
+      'price': price,
+      'address': address,
+      'quarter': quarter,
+      'city': city,
+      'latitude': latitude,
+      'longitude': longitude,
+      'geohash': coords,
+      'surface': surface,
+      'rooms': rooms,
+      'bathrooms': bathrooms,
+      'floor': floor,
+      'isFurnished': isFurnished,
+      'equipment': equipment,
+      'images': images,
+      'ownerId': ownerId,
+      'ownerName': ownerName,
+      'ownerPhotoUrl': ownerPhotoUrl,
+      'ownerIsVerified': ownerIsVerified,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'publishedAt':
+          publishedAt == null ? null : Timestamp.fromDate(publishedAt!),
+      'status': status.name,
+      'rejectionReason': rejectionReason,
+      'searchKeywords': buildSearchKeywords(),
+    };
+  }
+
+  /// Payload de creation : ajoute les champs que les regles exigent a la
+  /// creation et que [toFirestore] omet volontairement pour les mises a jour.
+  Map<String, dynamic> toFirestoreForCreate() {
+    return {
+      ...toFirestore(),
+      'views': 0,
+      'favoritesCount': 0,
+      'boostedUntil': null,
+    };
+  }
+
+  /// Jeu de mots-cles minuscules servant la recherche `array-contains`.
+  ///
+  /// Firestore ne fait pas de recherche plein texte : on precalcule les tokens
+  /// a l'ecriture. Limite assumee — la recherche porte sur des mots entiers du
+  /// titre, du quartier, du type et de la ville, pas sur des sous-chaines.
+  List<String> buildSearchKeywords() {
+    final source = '$title $quarter $city $type';
+    final tokens = source
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9à-ÿ\s]'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((t) => t.length >= 3)
+        .toSet();
+    // Firestore plafonne un `array-contains-any` a 30 valeurs ; on borne le
+    // tableau stocke pour rester dans des couts d'index raisonnables.
+    return tokens.take(30).toList();
+  }
+
+  static DateTime? _toDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
+  // ── Copie ───────────────────────────────────────────────────────────────
+
+  Property copyWith({
+    String? id,
+    String? title,
+    String? type,
+    String? description,
+    int? price,
+    String? address,
+    String? quarter,
+    String? city,
+    double? latitude,
+    double? longitude,
+    double? surface,
+    int? rooms,
+    int? bathrooms,
+    int? floor,
+    bool? isFurnished,
+    List<String>? equipment,
+    List<String>? images,
+    String? ownerId,
+    String? ownerName,
+    String? ownerPhotoUrl,
+    bool? ownerIsVerified,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? publishedAt,
+    PropertyStatus? status,
+    int? views,
+    int? favoritesCount,
+    DateTime? boostedUntil,
+    String? rejectionReason,
+  }) {
+    final lat = latitude ?? this.latitude;
+    final lng = longitude ?? this.longitude;
+    return Property(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      type: type ?? this.type,
+      description: description ?? this.description,
+      price: price ?? this.price,
+      address: address ?? this.address,
+      quarter: quarter ?? this.quarter,
+      city: city ?? this.city,
+      latitude: lat,
+      longitude: lng,
+      geohash: (lat != null && lng != null) ? Geohash.encode(lat, lng) : null,
+      surface: surface ?? this.surface,
+      rooms: rooms ?? this.rooms,
+      bathrooms: bathrooms ?? this.bathrooms,
+      floor: floor ?? this.floor,
+      isFurnished: isFurnished ?? this.isFurnished,
+      equipment: equipment ?? this.equipment,
+      images: images ?? this.images,
+      ownerId: ownerId ?? this.ownerId,
+      ownerName: ownerName ?? this.ownerName,
+      ownerPhotoUrl: ownerPhotoUrl ?? this.ownerPhotoUrl,
+      ownerIsVerified: ownerIsVerified ?? this.ownerIsVerified,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      publishedAt: publishedAt ?? this.publishedAt,
+      status: status ?? this.status,
+      views: views ?? this.views,
+      favoritesCount: favoritesCount ?? this.favoritesCount,
+      boostedUntil: boostedUntil ?? this.boostedUntil,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+    );
+  }
+
+  /// Annonce vierge servant de point de depart au formulaire de publication.
+  factory Property.empty({
+    required String ownerId,
+    required String ownerName,
+    String? ownerPhotoUrl,
+    bool ownerIsVerified = false,
+  }) {
+    return Property(
+      id: '',
+      title: '',
+      type: '',
+      description: '',
+      price: 0,
+      address: '',
+      quarter: '',
       city: 'Abidjan',
-      surface: 85,
-      rooms: 3,
-      bathrooms: 2,
-      floor: 2,
-      isFurnished: false,
-      equipment: ['Eau courante', 'Electricite', 'Parking', 'Balcon'],
-      images: [],
-      ownerId: 'owner_1',
-      ownerName: 'Jean Kouame',
-      ownerPhone: '+225 07 08 09 10',
-      createdAt: DateTime.now().subtract(const Duration(days: 5)),
-      views: 342,
-    ),
-    Property(
-      id: 'prop_2',
-      title: 'Villa 4 pieces - Riviera',
-      type: 'Villa',
-      description:
-          'Superbe villa avec jardin et piscine dans le quartier residentiel de la Riviera. Ideale pour famille.',
-      price: 500000,
-      address: 'Boulevard de la Riviera, Cocody',
-      quarter: 'Cocody',
-      city: 'Abidjan',
-      surface: 200,
-      rooms: 4,
-      bathrooms: 3,
-      floor: 0,
-      isFurnished: true,
-      equipment: [
-        'Eau courante',
-        'Electricite',
-        'Climatisation',
-        'Internet/WiFi',
-        'Parking',
-        'Gardien',
-        'Piscine',
-        'Cuisine equipee',
-      ],
-      images: [],
-      ownerId: 'owner_1',
-      ownerName: 'Jean Kouame',
-      ownerPhone: '+225 07 08 09 10',
-      createdAt: DateTime.now().subtract(const Duration(days: 12)),
-      views: 587,
-    ),
-    Property(
-      id: 'prop_3',
-      title: 'Studio meuble - Marcory',
-      type: 'Studio',
-      description:
-          'Studio entierement meuble, pret a emmenager. Quartier securise et anime avec acces facile aux transports.',
-      price: 120000,
-      address: 'Avenue de la TSF, Marcory',
-      quarter: 'Marcory',
-      city: 'Abidjan',
-      surface: 35,
+      surface: 0,
       rooms: 1,
       bathrooms: 1,
-      floor: 3,
-      isFurnished: true,
-      equipment: [
-        'Eau courante',
-        'Electricite',
-        'Climatisation',
-        'Internet/WiFi',
-        'Meuble',
-      ],
-      images: [],
-      ownerId: 'owner_2',
-      ownerName: 'Awa Sangare',
-      ownerPhone: '+225 05 12 34 56',
-      createdAt: DateTime.now().subtract(const Duration(days: 2)),
-      views: 128,
-    ),
-    Property(
-      id: 'prop_4',
-      title: 'Duplex 5 pieces - Cocody Angre',
-      type: 'Duplex',
-      description:
-          'Magnifique duplex spacieux avec terrasse et vue degagee. Quartier residentiel calme, ideal pour famille.',
-      price: 450000,
-      address: '8eme Tranche, Angre, Cocody',
-      quarter: 'Cocody',
-      city: 'Abidjan',
-      surface: 180,
-      rooms: 5,
-      bathrooms: 3,
-      floor: 0,
-      isFurnished: false,
-      equipment: [
-        'Eau courante',
-        'Electricite',
-        'Climatisation',
-        'Parking',
-        'Gardien',
-        'Balcon',
-        'Cuisine equipee',
-      ],
-      images: [],
-      ownerId: 'owner_1',
-      ownerName: 'Jean Kouame',
-      ownerPhone: '+225 07 08 09 10',
-      createdAt: DateTime.now().subtract(const Duration(days: 8)),
-      views: 215,
-    ),
-    Property(
-      id: 'prop_5',
-      title: 'Appartement 2 pieces - Plateau',
-      type: 'Appartement',
-      description:
-          'Appartement moderne au coeur du Plateau, le centre des affaires d\'Abidjan. Proche de tout.',
-      price: 180000,
-      address: 'Rue du Commerce, Plateau',
-      quarter: 'Plateau',
-      city: 'Abidjan',
-      surface: 60,
-      rooms: 2,
-      bathrooms: 1,
-      floor: 5,
-      isFurnished: false,
-      equipment: ['Eau courante', 'Electricite', 'Climatisation', 'Parking'],
-      images: [],
-      ownerId: 'owner_3',
-      ownerName: 'Moussa Kone',
-      ownerPhone: '+225 01 23 45 67',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      views: 75,
-    ),
-    Property(
-      id: 'prop_6',
-      title: 'Chambre meublee - Yopougon',
-      type: 'Chambre',
-      description:
-          'Chambre meublee dans une residence securisee a Yopougon. Ideale pour etudiant ou jeune professionnel.',
-      price: 55000,
-      address: 'Quartier Millionnaire, Yopougon',
-      quarter: 'Yopougon',
-      city: 'Abidjan',
-      surface: 20,
-      rooms: 1,
-      bathrooms: 1,
-      floor: 1,
-      isFurnished: true,
-      equipment: ['Eau courante', 'Electricite', 'Meuble'],
-      images: [],
-      ownerId: 'owner_4',
-      ownerName: 'Adama Toure',
-      ownerPhone: '+225 09 87 65 43',
-      createdAt: DateTime.now().subtract(const Duration(days: 15)),
-      views: 93,
-    ),
-  ];
+      ownerId: ownerId,
+      ownerName: ownerName,
+      ownerPhotoUrl: ownerPhotoUrl,
+      ownerIsVerified: ownerIsVerified,
+      createdAt: DateTime.now(),
+      status: PropertyStatus.draft,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) => other is Property && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

@@ -1,12 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:my_home_ci/config/constants.dart';
-import 'package:my_home_ci/config/theme.dart';
-import 'package:my_home_ci/models/property.dart';
-import 'package:my_home_ci/widgets/filter_chip_bar.dart';
-import 'package:my_home_ci/widgets/property_card.dart';
-import 'package:my_home_ci/widgets/search_bar_widget.dart';
+import 'package:provider/provider.dart';
 
+import '../../config/constants.dart';
+import '../../config/routes.dart';
+import '../../config/theme.dart';
+import '../../models/property.dart';
+import '../../models/quarter.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/property_provider.dart';
+import '../../services/location_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/property_service.dart';
+import '../../services/quarter_service.dart';
+import '../../widgets/property_card.dart';
+import '../../widgets/search_bar_widget.dart';
+import '../property_detail/property_detail_screen.dart';
+import '../property_list/property_list_screen.dart';
+
+/// Écran d'accueil : recherche, filtres rapides, « Près de vous »,
+/// annonces récentes et quartiers populaires.
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
@@ -16,301 +29,519 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   int _selectedTypeIndex = 0;
-  final List<String> _typeFilters = ['Tout', ...AppConstants.propertyTypes];
 
-  List<Property> get _filteredProperties {
-    if (_selectedTypeIndex == 0) return Property.mockProperties;
-    final type = _typeFilters[_selectedTypeIndex];
-    return Property.mockProperties
-        .where((p) => p.type == type)
-        .toList();
+  List<Property> _recent = const [];
+  List<Property> _nearby = const [];
+  List<Quarter> _quarters = const [];
+
+  bool _loadingRecent = true;
+  bool _loadingNearby = false;
+  String? _nearbyMessage;
+
+  /// Types proposés en filtres rapides, « Tous » en tête.
+  static const List<String> _quickTypes = [
+    'Tous',
+    'Studio',
+    'Appartement',
+    'Villa',
+    'Chambre',
+    'Duplex',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecent();
+    _loadQuarters();
+    _loadNearby();
+  }
+
+  Future<void> _loadRecent() async {
+    try {
+      final items = await PropertyService.instance.fetchRecent(limit: 10);
+      if (!mounted) return;
+      setState(() {
+        _recent = items;
+        _loadingRecent = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingRecent = false);
+    }
+  }
+
+  Future<void> _loadQuarters() async {
+    final quarters = await QuarterService.instance.fetchPopular();
+    if (mounted) setState(() => _quarters = quarters);
+  }
+
+  /// Charge les logements proches.
+  ///
+  /// La permission n'est pas demandée au lancement mais ici, au moment où
+  /// l'utilisateur voit à quoi elle sert : une demande à froid, dès la
+  /// première seconde, se solde massivement par un refus définitif.
+  Future<void> _loadNearby() async {
+    setState(() {
+      _loadingNearby = true;
+      _nearbyMessage = null;
+    });
+
+    final result = await LocationService.instance.getCurrentPosition();
+    if (!mounted) return;
+
+    switch (result) {
+      case LocationSuccess(:final latitude, :final longitude):
+        try {
+          final items = await PropertyService.instance.fetchNearby(
+            latitude: latitude,
+            longitude: longitude,
+            radiusMeters: 5000,
+          );
+          if (!mounted) return;
+          setState(() {
+            _nearby = items.take(10).toList();
+            _loadingNearby = false;
+            _nearbyMessage = items.isEmpty
+                ? 'Aucun logement dans un rayon de 5 km pour le moment.'
+                : null;
+          });
+        } catch (_) {
+          if (!mounted) return;
+          setState(() {
+            _loadingNearby = false;
+            _nearbyMessage = 'Recherche a proximite indisponible.';
+          });
+        }
+      case LocationServiceDisabled():
+        setState(() {
+          _loadingNearby = false;
+          _nearbyMessage =
+              'Activez la localisation de votre appareil pour voir les '
+              'logements proches.';
+        });
+      case LocationDenied(:final permanently):
+        setState(() {
+          _loadingNearby = false;
+          _nearbyMessage = permanently
+              ? 'Autorisez la localisation dans les reglages pour voir les '
+                  'logements proches.'
+              : 'Autorisez la localisation pour voir les logements proches.';
+        });
+      case LocationFailure():
+        setState(() {
+          _loadingNearby = false;
+          _nearbyMessage = 'Position indisponible pour le moment.';
+        });
+    }
+  }
+
+  void _openList({String? type, String? quarter, String? title}) {
+    final provider = context.read<PropertyProvider>();
+    var filters = provider.filters;
+    filters = type == null
+        ? filters.copyWith(clearType: true)
+        : filters.copyWith(type: type);
+    filters = quarter == null
+        ? filters.copyWith(clearQuarter: true)
+        : filters.copyWith(quarter: quarter);
+    provider.applyFilters(filters);
+
+    Navigator.pushNamed(
+      context,
+      AppRoutes.propertyList,
+      arguments: PropertyListArgs(title: title),
+    );
+  }
+
+  void _openDetail(Property property) {
+    Navigator.pushNamed(
+      context,
+      AppRoutes.propertyDetail,
+      arguments: PropertyDetailArgs.of(property),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final auth = context.watch<AuthProvider>();
 
-    return CustomScrollView(
-      slivers: [
-        // ── SliverAppBar ──
-        SliverAppBar(
-          floating: true,
-          snap: true,
-          elevation: 0,
-          backgroundColor: isDark ? AppTheme.surfaceDark : AppTheme.surfaceLight,
-          title: Text(
-            AppConstants.appName,
-            style: GoogleFonts.poppins(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-          centerTitle: false,
-          actions: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                IconButton(
-                  onPressed: () {},
-                  icon: Icon(
-                    Icons.notifications_outlined,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppTheme.secondaryOrange,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 4),
-          ],
-        ),
-
-        // ── Barre de recherche ──
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 16),
-            child: SearchBarWidget(
-              onTap: () {
-                // Navigation vers ecran de recherche a venir
-              },
-              onFilterTap: () {
-                // Ouvrir filtres
-              },
-            ),
+    return Scaffold(
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () async {
+            await Future.wait([_loadRecent(), _loadNearby()]);
+          },
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 24),
+            children: [
+              _header(auth, isDark),
+              const SizedBox(height: 8),
+              // SearchBarWidget porte sa propre marge horizontale : l'envelopper
+              // dans un Padding la doublerait.
+              SearchBarWidget(
+                onTap: () => _openList(title: 'Rechercher'),
+                onFilterTap: () => _openList(title: 'Rechercher'),
+              ),
+              const SizedBox(height: 16),
+              _quickFilters(isDark),
+              const SizedBox(height: 20),
+              _nearbySection(isDark),
+              const SizedBox(height: 24),
+              _recentSection(isDark),
+              const SizedBox(height: 24),
+              if (_quarters.isNotEmpty) _quartersSection(isDark),
+            ],
           ),
         ),
-
-        // ── Chips types de bien ──
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 20),
-            child: FilterChipBar(
-              labels: _typeFilters,
-              selectedIndex: _selectedTypeIndex,
-              onSelected: (index) {
-                setState(() => _selectedTypeIndex = index);
-              },
-            ),
-          ),
-        ),
-
-        // ── Section "Pres de vous" ──
-        SliverToBoxAdapter(
-          child: _buildSectionHeader(
-            context,
-            title: 'Pres de vous',
-            onSeeAll: () {},
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: SizedBox(
-            height: 290,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _filteredProperties.take(5).length,
-              separatorBuilder: (_, __) => const SizedBox(width: 14),
-              itemBuilder: (context, index) {
-                final property = _filteredProperties[index];
-                return PropertyCard(
-                  property: property,
-                  variant: PropertyCardVariant.horizontal,
-                  onTap: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/property-detail',
-                      arguments: property,
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ),
-
-        // ── Section "Quartiers populaires" ──
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 24),
-            child: _buildSectionHeader(
-              context,
-              title: 'Quartiers populaires',
-              onSeeAll: () {},
-            ),
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: SizedBox(
-            height: 100,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: AppConstants.popularQuarters.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (context, index) {
-                return _buildQuarterCard(
-                  context,
-                  name: AppConstants.popularQuarters[index],
-                  index: index,
-                );
-              },
-            ),
-          ),
-        ),
-
-        // ── Section "Annonces recentes" ──
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 24),
-            child: _buildSectionHeader(
-              context,
-              title: 'Annonces recentes',
-              onSeeAll: () {},
-            ),
-          ),
-        ),
-        SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final sorted = List<Property>.from(_filteredProperties)
-                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-              final property = sorted[index];
-              return PropertyCard(
-                property: property,
-                variant: PropertyCardVariant.vertical,
-                onTap: () {
-                  // TODO: naviguer vers le detail
-                },
-              );
-            },
-            childCount: _filteredProperties.length,
-          ),
-        ),
-
-        // Espacement en bas
-        const SliverToBoxAdapter(
-          child: SizedBox(height: 24),
-        ),
-      ],
+      ),
     );
   }
 
-  // ── En-tete de section ──
-  Widget _buildSectionHeader(
-    BuildContext context, {
-    required String title,
-    required VoidCallback onSeeAll,
-  }) {
+  Widget _header(AuthProvider auth, bool isDark) {
+    final name = auth.user?.name.split(' ').first;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          GestureDetector(
-            onTap: onSeeAll,
-            child: Text(
-              'Voir tout',
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name != null ? 'Bonjour $name' : 'Bonjour',
+                  style: GoogleFonts.poppins(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : AppTheme.textPrimaryLight,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  AppConstants.slogan,
+                  style: GoogleFonts.inter(
+                      fontSize: 13, color: Theme.of(context).hintColor),
+                ),
+              ],
             ),
           ),
+          if (auth.isSignedIn)
+            StreamBuilder<int>(
+              stream:
+                  NotificationService.instance.watchUnreadCount(auth.uid!),
+              builder: (context, snapshot) {
+                final count = snapshot.data ?? 0;
+                return IconButton(
+                  onPressed: () =>
+                      Navigator.pushNamed(context, AppRoutes.notifications),
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(Icons.notifications_none, size: 26),
+                      if (count > 0)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: AppTheme.secondaryOrange,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color:
+                                    Theme.of(context).scaffoldBackgroundColor,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );
   }
 
-  // ── Carte quartier ──
-  Widget _buildQuarterCard(
-    BuildContext context, {
-    required String name,
-    required int index,
-  }) {
-    final colors = [
-      const Color(0xFF2E7D5B),
-      const Color(0xFFF5A623),
-      const Color(0xFF1565C0),
-      const Color(0xFFE65100),
-      const Color(0xFF6A1B9A),
-      const Color(0xFF00838F),
-      const Color(0xFF2E7D32),
-      const Color(0xFF795548),
-      const Color(0xFF37474F),
-      const Color(0xFFC62828),
-    ];
-
-    final icons = [
-      Icons.apartment_rounded,
-      Icons.location_city_rounded,
-      Icons.business_rounded,
-      Icons.home_work_rounded,
-      Icons.villa_rounded,
-      Icons.store_rounded,
-      Icons.domain_rounded,
-      Icons.holiday_village_rounded,
-      Icons.maps_home_work_rounded,
-      Icons.other_houses_rounded,
-    ];
-
-    final color = colors[index % colors.length];
-
-    return GestureDetector(
-      onTap: () {
-        // TODO: filtrer par quartier
-      },
-      child: Container(
-        width: 110,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              color,
-              color.withValues(alpha: 0.7),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(AppTheme.radiusDefault),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icons[index % icons.length],
-              color: Colors.white,
-              size: 28,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              name,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+  Widget _quickFilters(bool isDark) {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: _quickTypes.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final selected = _selectedTypeIndex == i;
+          return GestureDetector(
+            onTap: () {
+              setState(() => _selectedTypeIndex = i);
+              _openList(
+                type: i == 0 ? null : _quickTypes[i],
+                title: i == 0 ? 'Tous les logements' : _quickTypes[i],
+              );
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppTheme.primaryGreen
+                    : (isDark ? AppTheme.cardDark : const Color(0xFFF0F3F1)),
+                borderRadius: BorderRadius.circular(19),
+              ),
+              child: Text(
+                _quickTypes[i],
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: selected
+                      ? Colors.white
+                      : (isDark ? Colors.white70 : AppTheme.textPrimaryLight),
+                ),
               ),
             ),
-          ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _nearbySection(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          isDark,
+          'Pres de vous',
+          action: _nearby.isEmpty ? null : 'Voir la carte',
+          onAction: _nearby.isEmpty
+              ? null
+              : () => Navigator.pushNamed(context, AppRoutes.home,
+                  arguments: 1),
         ),
+        const SizedBox(height: 12),
+        if (_loadingNearby)
+          const SizedBox(
+            height: 100,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          )
+        else if (_nearby.isNotEmpty)
+          SizedBox(
+            height: 268,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: _nearby.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, i) {
+                final property = _nearby[i];
+                final position = LocationService.instance.lastKnown;
+                String? distance;
+                if (position != null && property.hasLocation) {
+                  distance = LocationService.instance.formatDistance(
+                    LocationService.instance.distanceBetween(
+                      position.latitude,
+                      position.longitude,
+                      property.latitude!,
+                      property.longitude!,
+                    ),
+                  );
+                }
+                return PropertyCard(
+                  property: property,
+                  variant: PropertyCardVariant.horizontal,
+                  distanceLabel: distance,
+                  onTap: () => _openDetail(property),
+                );
+              },
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.cardDark : const Color(0xFFF7F9F8),
+                borderRadius: BorderRadius.circular(AppTheme.radiusDefault),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.near_me_outlined,
+                      size: 22, color: AppTheme.primaryGreen),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _nearbyMessage ??
+                          'Autorisez la localisation pour voir les logements '
+                              'proches.',
+                      style: GoogleFonts.inter(fontSize: 13, height: 1.45),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _loadNearby,
+                    child: Text('Activer',
+                        style: GoogleFonts.inter(
+                            fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _recentSection(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          isDark,
+          'Annonces recentes',
+          action: 'Tout voir',
+          onAction: () => _openList(title: 'Annonces recentes'),
+        ),
+        const SizedBox(height: 12),
+        if (_loadingRecent)
+          const SizedBox(
+            height: 268,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          )
+        else if (_recent.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              'Aucune annonce publiee pour le moment.',
+              style: GoogleFonts.inter(
+                  fontSize: 13.5, color: Theme.of(context).hintColor),
+            ),
+          )
+        else
+          SizedBox(
+            height: 268,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: _recent.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, i) => PropertyCard(
+                property: _recent[i],
+                variant: PropertyCardVariant.horizontal,
+                onTap: () => _openDetail(_recent[i]),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _quartersSection(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(isDark, 'Quartiers populaires'),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 96,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: _quarters.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final quarter = _quarters[i];
+              return GestureDetector(
+                onTap: () => _openList(
+                  quarter: quarter.name,
+                  title: quarter.name,
+                ),
+                child: Container(
+                  width: 128,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.primaryGreen.withValues(alpha: 0.9),
+                        AppTheme.primaryGreenLight.withValues(alpha: 0.75),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius:
+                        BorderRadius.circular(AppTheme.radiusDefault),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Icon(Icons.location_city,
+                          size: 20, color: Colors.white70),
+                      Text(
+                        quarter.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (quarter.propertyCount > 0)
+                        Text(
+                          '${quarter.propertyCount} logements',
+                          style: GoogleFonts.inter(
+                              fontSize: 11, color: Colors.white70),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionHeader(
+    bool isDark,
+    String title, {
+    String? action,
+    VoidCallback? onAction,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : AppTheme.textPrimaryLight,
+              ),
+            ),
+          ),
+          if (action != null)
+            TextButton(
+              onPressed: onAction,
+              child: Text(
+                action,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryGreen,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

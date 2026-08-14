@@ -49,3 +49,26 @@ node_modules/
 
 # Generated PDF (regenerable)
 CAHIER_DES_CHARGES_MY_HOME_CI.pdf
+
+# ── Secrets et configuration locale ──────────────────────────────────────
+# Le keystore et ses mots de passe ne doivent jamais quitter la machine.
+android/key.properties
+*.jks
+*.keystore
+android/local.properties
+
+# Clefs de service Firebase (Admin SDK) — donnent un acces total au projet.
+**/serviceAccountKey.json
+**/*-firebase-adminsdk-*.json
+
+# Dependances et artefacts des Cloud Functions
+functions/node_modules/
+functions/.env
+functions/.env.*
+!functions/.env.example
+
+# Sorties de build iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec

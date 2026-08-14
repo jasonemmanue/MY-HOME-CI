@@ -1,0 +1,62 @@
+rules_version = '2';
+
+// ============================================================================
+// MY HOME CI — Regles de securite Cloud Storage
+// ----------------------------------------------------------------------------
+// Les images sont publiques en lecture (les annonces sont consultables sans
+// compte), mais l'ecriture est strictement cloisonnee par proprietaire, avec
+// un plafond de taille et un filtre sur le type MIME : sans cela, le bucket
+// devient un hebergeur de fichiers gratuit pour n'importe qui.
+// ============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    // 5 Mo : au-dela, c'est que la compression cote client n'a pas tourne.
+    function isImageUnder5Mb() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
+    }
+
+    // Photos d'annonces : properties/{ownerId}/{propertyId}/{fichier}
+    match /properties/{ownerId}/{propertyId}/{fileName} {
+      allow read: if true;
+      allow write: if (isSignedIn() && request.auth.uid == ownerId && isImageUnder5Mb())
+        || isAdmin();
+    }
+
+    // Photo de profil : avatars/{uid}/{fichier}
+    match /avatars/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if (isSignedIn() && request.auth.uid == userId && isImageUnder5Mb())
+        || isAdmin();
+    }
+
+    // Images echangees dans le chat : chat/{conversationId}/{fichier}
+    // Lecture restreinte aux utilisateurs connectes — une photo envoyee en
+    // message prive n'a pas a etre indexable publiquement.
+    match /chat/{conversationId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isImageUnder5Mb();
+    }
+
+    // Pieces d'identite pour le badge verifie : jamais lisibles publiquement.
+    match /verifications/{userId}/{fileName} {
+      allow read: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
+      allow write: if isSignedIn() && request.auth.uid == userId
+        && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

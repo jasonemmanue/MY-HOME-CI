@@ -1,0 +1,227 @@
+rules_version = '2';
+
+// ============================================================================
+// MY HOME CI — Regles de securite Firestore
+// ----------------------------------------------------------------------------
+// Principes :
+//  • Les annonces `active` sont lisibles par tous, y compris les visiteurs non
+//    authentifies (le cahier des charges impose la consultation sans compte).
+//  • Le numero de telephone et l'email d'un utilisateur ne sont JAMAIS lisibles
+//    publiquement : ils vivent dans users/{uid}/private/contact. C'est ce qui
+//    rend credible la promesse « communication sans echanger de numeros ».
+//  • Tout ce qui touche a l'argent (transactions, paiements web, statut Pro,
+//    badge verifie) est en ecriture serveur uniquement — jamais depuis le
+//    client, sinon un utilisateur s'auto-octroie le Pack Pro.
+//  • Le role admin vient d'un custom claim, pas d'un champ Firestore : un champ
+//    peut etre modifie par une regle mal ecrite, un claim non.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    // Champs qu'un client n'a jamais le droit d'ecrire lui-meme.
+    function noPrivilegeEscalation(data) {
+      return !data.diff(resource.data).affectedKeys()
+        .hasAny(['role', 'isVerified', 'isPro', 'proUntil', 'isSuspended',
+                 'suspendedUntil', 'propertyCount']);
+    }
+
+    // ── users ──────────────────────────────────────────────────────────────
+    // Profil public : displayName, photoUrl, role, isVerified, createdAt,
+    // propertyCount. Volontairement sans email ni telephone.
+    match /users/{userId} {
+      allow read: if true;
+
+      allow create: if isSelf(userId)
+        && request.resource.data.role in ['tenant', 'owner']
+        && request.resource.data.isVerified == false
+        && request.resource.data.isPro == false
+        && request.resource.data.isSuspended == false;
+
+      allow update: if isAdmin()
+        || (isSelf(userId) && noPrivilegeEscalation(request.resource.data));
+
+      // La suppression de compte passe par la Cloud Function deleteAccount,
+      // qui purge aussi annonces, messages et fichiers Storage.
+      allow delete: if false;
+
+      // Coordonnees privees : lisibles par le titulaire et l'admin seulement.
+      match /private/{docId} {
+        allow read, write: if isSelf(userId) || isAdmin();
+      }
+
+      match /favorites/{propertyId} {
+        allow read, write: if isSelf(userId);
+      }
+
+      match /alerts/{alertId} {
+        allow read, write: if isSelf(userId);
+      }
+
+      // Ecrites par les Cloud Functions ; le client ne fait que lire et
+      // marquer comme lues.
+      match /notifications/{notifId} {
+        allow read: if isSelf(userId);
+        allow update: if isSelf(userId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['isRead', 'readAt']);
+        allow create, delete: if false;
+      }
+
+      // Jetons FCM : ecriture par le titulaire uniquement, jamais lisibles
+      // par un tiers (un jeton vole permet d'usurper les notifications).
+      match /tokens/{tokenId} {
+        allow read, write: if isSelf(userId);
+      }
+    }
+
+    // ── properties ─────────────────────────────────────────────────────────
+    // status : draft | pending | active | rented | archived | rejected
+    match /properties/{propertyId} {
+
+      function isPropertyOwner() {
+        return isSignedIn() && resource.data.ownerId == request.auth.uid;
+      }
+
+      // Une annonce publiee est publique. Un brouillon, une annonce en attente
+      // de moderation ou rejetee n'est visible que de son auteur et de l'admin.
+      allow read: if resource.data.status == 'active'
+        || isPropertyOwner()
+        || isAdmin();
+
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.status in ['draft', 'pending']
+        && request.resource.data.price is int
+        && request.resource.data.price > 0
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 5
+        && request.resource.data.boostedUntil == null;
+
+      allow update: if
+        // Cas 1 — le proprietaire modifie son annonce, sans pouvoir la
+        // transferer, la publier sans moderation, ni s'offrir un boost.
+        (
+          isPropertyOwner()
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.status in ['draft', 'pending', 'rented', 'archived']
+          && request.resource.data.boostedUntil == resource.data.boostedUntil
+          && request.resource.data.views == resource.data.views
+        )
+        // Cas 2 — n'importe qui (visiteur inclus) incremente le compteur de
+        // vues ou de favoris, et rien d'autre.
+        || (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['views', 'favoritesCount'])
+        )
+        // Cas 3 — moderation.
+        || isAdmin();
+
+      allow delete: if isPropertyOwner() || isAdmin();
+    }
+
+    // ── conversations ──────────────────────────────────────────────────────
+    match /conversations/{conversationId} {
+
+      function isParticipant() {
+        return isSignedIn() && request.auth.uid in resource.data.participants;
+      }
+
+      allow read: if isParticipant() || isAdmin();
+
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants.size() == 2;
+
+      allow update: if isParticipant() || isAdmin();
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+
+        function isConversationParticipant() {
+          return isSignedIn() && request.auth.uid in
+            get(/databases/$(database)/documents/conversations/$(conversationId))
+              .data.participants;
+        }
+
+        allow read: if isConversationParticipant() || isAdmin();
+
+        allow create: if isConversationParticipant()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.type in ['text', 'image'];
+
+        // Seul l'accuse de lecture est modifiable — on ne reecrit pas
+        // l'historique d'une conversation.
+        allow update: if isConversationParticipant()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['readAt', 'isRead']);
+
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ── reports (signalements) ─────────────────────────────────────────────
+    // Creation ouverte, y compris aux visiteurs : un signalement doit rester
+    // possible meme sans compte, sinon la moderation ne remonte rien.
+    match /reports/{reportId} {
+      allow create: if request.resource.data.status == 'pending'
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── verificationRequests (badge proprietaire verifie) ──────────────────
+    match /verificationRequests/{userId} {
+      allow read: if isSelf(userId) || isAdmin();
+      allow create: if isSelf(userId)
+        && request.resource.data.status == 'pending';
+      allow update, delete: if isAdmin();
+    }
+
+    // ── transactions (GeniusPay) ───────────────────────────────────────────
+    // Lecture seule pour le payeur (polling du statut). Ecriture reservee aux
+    // Cloud Functions via l'Admin SDK, qui contourne ces regles.
+    match /transactions/{transactionId} {
+      allow read: if (isSignedIn() && resource.data.uid == request.auth.uid) || isAdmin();
+      allow write: if false;
+    }
+
+    // ── webPayments (flow iOS par email) ───────────────────────────────────
+    // Entierement serveur : le token est une cle porteuse, il ne doit jamais
+    // transiter par une lecture client directe.
+    match /webPayments/{token} {
+      allow read, write: if false;
+    }
+
+    // ── quarters (fiches quartier) ─────────────────────────────────────────
+    match /quarters/{quarterId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── adminSettings ──────────────────────────────────────────────────────
+    match /adminSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Tout le reste est refuse ───────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

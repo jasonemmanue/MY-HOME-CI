@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>My Home Ci</string>
+	<string>My Home CI</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>my_home_ci</string>
+	<string>MyHomeCI</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -28,6 +28,9 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+
+	<!-- L'application cible aussi la tablette (cahier des charges §6.1.3).
+	     Bloquer l'iPad en portrait sans justification est un motif de rejet. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -41,6 +44,92 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
+	<!-- ═══ Autorisations ═══════════════════════════════════════════════════
+	     Chaque cle NS…UsageDescription est OBLIGATOIRE des lors que l'API
+	     correspondante est liee au binaire. Son absence ne produit pas un
+	     refus poli : l'application est terminee par le systeme au moment de
+	     l'appel. Les libelles doivent expliquer l'usage concret — un texte
+	     generique du type « cette app utilise la camera » est un motif de
+	     rejet frequent (guideline 5.1.1). -->
+
+	<key>NSCameraUsageDescription</key>
+	<string>My Home CI utilise l'appareil photo pour vous permettre de photographier votre logement lors de la publication d'une annonce.</string>
+
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>My Home CI accede a vos photos pour illustrer vos annonces de logement et envoyer des images dans la messagerie.</string>
+
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>My Home CI enregistre dans votre galerie les photos que vous choisissez de telecharger depuis une annonce.</string>
+
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>My Home CI utilise votre position pour afficher les logements proches de vous sur la carte et calculer les distances.</string>
+
+	<!-- Aucune collecte de position en arriere-plan : la cle « Always » est
+	     volontairement absente. La demander sans usage reel est rejete. -->
+
+	<key>NSUserTrackingUsageDescription</key>
+	<string>My Home CI ne suit pas votre activite dans les applications d'autres societes.</string>
+
+	<key>NSFaceIDUsageDescription</key>
+	<string>My Home CI peut utiliser Face ID pour securiser l'acces a votre compte.</string>
+
+	<!-- ═══ Schemas d'URL ══════════════════════════════════════════════════
+	     ⚠️ A COMPLETER : le schema de connexion Google est le REVERSED_CLIENT_ID
+	     figurant dans ios/Runner/GoogleService-Info.plist. Il n'apparait dans
+	     ce fichier qu'une fois le fournisseur Google active dans la console
+	     Firebase (Authentication > Sign-in method > Google), puis le plist
+	     retelecharge. Sans ce schema, la connexion Google ouvre Safari et n'en
+	     revient jamais. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.myhomeci.app</string>
+			</array>
+		</dict>
+	</array>
+
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+		<string>mailto</string>
+		<string>tel</string>
+		<string>sms</string>
+		<string>whatsapp</string>
+	</array>
+
+	<!-- Reception des notifications distantes, y compris les push silencieux
+	     dont depend la verification Phone Auth. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>fetch</string>
+	</array>
+
+	<!-- Le swizzling du delegue est desactive : le jeton APNs et les
+	     notifications sont transmis manuellement dans AppDelegate.swift.
+	     Voir le commentaire de ce fichier pour la raison. -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+
+	<!-- Evite la question sur le chiffrement a chaque televersement vers
+	     App Store Connect. L'application n'utilise que le TLS standard, ce qui
+	     releve de l'exemption. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<!-- Clef Google Maps iOS. Substituee au build depuis le reglage
+	     MAPS_API_KEY_IOS (defini dans ios/Flutter/Keys.xcconfig, non versionne,
+	     ou par la variable d'environnement du meme nom sur Codemagic).
+	     Lue par AppDelegate.swift via Bundle.main. -->
+	<key>GMSApiKey</key>
+	<string>$(MAPS_API_KEY_IOS)</string>
+
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

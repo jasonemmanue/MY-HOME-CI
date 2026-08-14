@@ -1,10 +1,22 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:my_home_ci/config/constants.dart';
-import 'package:my_home_ci/config/routes.dart';
-import 'package:my_home_ci/config/theme.dart';
+import 'package:provider/provider.dart';
 
+import '../../config/constants.dart';
+import '../../config/routes.dart';
+import '../../config/theme.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/settings_provider.dart';
+
+/// Ecran d'ouverture, doublé d'un aiguillage de session.
+///
+/// La destination dépend de deux informations asynchrones : l'onboarding a-t-il
+/// déjà été vu, et une session est-elle rétablie ? On attend donc que
+/// [AuthProvider] sorte de l'état `unknown` avant de router — sans cette
+/// attente, un utilisateur déjà connecté serait renvoyé vers l'écran de
+/// connexion le temps que Firebase restaure sa session.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -18,53 +30,110 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _fadeAnimation;
   late final Animation<double> _scaleAnimation;
 
+  /// Durée minimale d'affichage : sans elle, une session déjà en cache ferait
+  /// disparaître le logo en une fraction de seconde, ce qui donne l'impression
+  /// d'un défaut d'affichage.
+  static const Duration _minimumDisplay = Duration(milliseconds: 1800);
+
+  /// Au-delà, on n'attend plus la session : mieux vaut afficher l'écran de
+  /// connexion qu'un splash figé si le réseau est coupé.
+  static const Duration _maximumWait = Duration(seconds: 6);
+
+  bool _navigated = false;
+  late final DateTime _startedAt;
+  Timer? _timeout;
+
   @override
   void initState() {
     super.initState();
+    _startedAt = DateTime.now();
 
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
-
-    _fadeAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeIn,
-    );
-
+    _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
     _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
-
     _controller.forward();
 
-    Timer(const Duration(milliseconds: 2500), () {
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.onboarding);
-      }
-    });
+    _timeout = Timer(_maximumWait, () => _route(force: true));
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRoute());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _maybeRoute();
+  }
+
+  void _maybeRoute() {
+    if (!mounted || _navigated) return;
+    final auth = context.read<AuthProvider>();
+    if (auth.state == SessionState.unknown) {
+      // On se remet en attente : le provider notifiera, et le prochain
+      // `didChangeDependencies` rappellera cette méthode.
+      return;
+    }
+    _route();
+  }
+
+  Future<void> _route({bool force = false}) async {
+    if (!mounted || _navigated) return;
+
+    final elapsed = DateTime.now().difference(_startedAt);
+    if (elapsed < _minimumDisplay) {
+      await Future<void>.delayed(_minimumDisplay - elapsed);
+      if (!mounted || _navigated) return;
+    }
+
+    _navigated = true;
+    _timeout?.cancel();
+
+    final settings = context.read<SettingsProvider>();
+    final auth = context.read<AuthProvider>();
+
+    final String destination;
+    if (!settings.onboardingSeen) {
+      destination = AppRoutes.onboarding;
+    } else if (auth.isSignedIn || auth.isGuest) {
+      destination = AppRoutes.home;
+    } else {
+      destination = AppRoutes.auth;
+    }
+
+    Navigator.pushReplacementNamed(context, destination);
   }
 
   @override
   void dispose() {
+    _timeout?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Réagit aux changements de session pour déclencher l'aiguillage dès que
+    // Firebase a tranché.
+    context.watch<AuthProvider>();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRoute());
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.white,
-              Color(0xFFF0F7F4), // very light green tint
-            ],
+            colors: isDark
+                ? [const Color(0xFF12211A), const Color(0xFF0B1510)]
+                : [Colors.white, const Color(0xFFF0F7F4)],
           ),
         ),
         child: FadeTransition(
@@ -74,7 +143,6 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // -- Logo image --
                 Container(
                   width: 120,
                   height: 120,
@@ -95,10 +163,7 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 28),
-
-                // -- App name --
                 Text(
                   AppConstants.appName,
                   style: GoogleFonts.poppins(
@@ -108,23 +173,19 @@ class _SplashScreenState extends State<SplashScreen>
                     letterSpacing: 2,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
-                // -- Slogan --
                 Text(
                   AppConstants.slogan,
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w400,
-                    color: AppTheme.textSecondaryLight,
+                    color: isDark
+                        ? Colors.white70
+                        : AppTheme.textSecondaryLight,
                     letterSpacing: 0.5,
                   ),
                 ),
-
                 const SizedBox(height: 48),
-
-                // -- Loading indicator --
                 SizedBox(
                   width: 32,
                   height: 32,

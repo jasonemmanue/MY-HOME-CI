@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:my_home_ci/config/theme.dart';
-import 'package:my_home_ci/models/property.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../../config/routes.dart';
+import '../../config/theme.dart';
+import '../../models/property.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/favorites_provider.dart';
+import '../../services/property_service.dart';
+import '../../widgets/property_card.dart';
+import '../property_detail/property_detail_screen.dart';
+
+/// Annonces mises de côté.
+///
+/// Les identifiants viennent de [FavoritesProvider] (temps réel), les annonces
+/// elles-mêmes sont rechargées à la demande : garder les documents complets en
+/// mémoire les figerait, alors qu'un loyer ou un statut peut changer.
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
 
@@ -11,258 +24,205 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  late List<Property> _favorites;
-
-  static final NumberFormat _fmt = NumberFormat.decimalPattern('fr_FR');
+  List<Property> _properties = const [];
+  Set<String> _loadedFor = const {};
+  bool _loading = false;
 
   @override
-  void initState() {
-    super.initState();
-    // Mock: use first 4 properties as "favorites"
-    _favorites = List.from(
-      Property.mockProperties.take(4),
-    );
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncWithFavorites();
   }
 
-  void _removeFavorite(int index) {
-    final removed = _favorites[index];
-    setState(() => _favorites.removeAt(index));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${removed.title} retire des favoris'),
-        action: SnackBarAction(
-          label: 'Annuler',
-          textColor: AppTheme.secondaryOrange,
-          onPressed: () {
-            setState(() => _favorites.insert(index, removed));
-          },
-        ),
-      ),
-    );
+  Future<void> _syncWithFavorites() async {
+    // `read` et non `watch` : la dependance est deja enregistree par le
+    // `watch` de build(), c'est lui qui declenche ce rappel via
+    // didChangeDependencies. Un `watch` ici n'ajouterait rien et serait
+    // invalide apres le premier `await`.
+    final favorites = context.read<FavoritesProvider>();
+    final ids = favorites.ids;
+
+    // On ne recharge que si l'ensemble a changé : sans cette garde, chaque
+    // notification du provider relancerait une requête réseau.
+    if (ids.length == _loadedFor.length && ids.containsAll(_loadedFor)) return;
+
+    _loadedFor = {...ids};
+
+    if (ids.isEmpty) {
+      setState(() {
+        _properties = const [];
+        _loading = false;
+      });
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      final ordered = await favorites.orderedIds();
+      final loaded = await PropertyService.instance.fetchByIds(ordered);
+      if (!mounted) return;
+      setState(() {
+        _properties = loaded;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final favorites = context.watch<FavoritesProvider>();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mes Favoris'),
+        title: Text(
+          'Favoris',
+          style: GoogleFonts.poppins(fontSize: 19, fontWeight: FontWeight.w700),
+        ),
+        actions: [
+          if (favorites.count > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Center(
+                child: Text(
+                  '${favorites.count}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primaryGreen,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
-      body: _favorites.isEmpty ? _buildEmptyState() : _buildList(),
+      body: _body(auth, favorites),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _body(AuthProvider auth, FavoritesProvider favorites) {
+    if (_loading && _properties.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (favorites.count == 0) {
+      return _empty(auth);
+    }
+
+    // Une annonce archivée par son propriétaire disparaît de la liste mais
+    // reste dans les favoris : on le signale plutôt que de laisser l'écart
+    // passer pour un bug.
+    final missing = favorites.count - _properties.length;
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        _loadedFor = const {};
+        await _syncWithFavorites();
+      },
+      child: CustomScrollView(
+        slivers: [
+          if (missing > 0)
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.secondaryOrange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline,
+                        size: 18, color: AppTheme.secondaryOrange),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        missing == 1
+                            ? '1 annonce enregistree n\'est plus disponible.'
+                            : '$missing annonces enregistrees ne sont plus '
+                                'disponibles.',
+                        style: GoogleFonts.inter(fontSize: 12.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverGrid(
+              gridDelegate:
+                  const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.62,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, i) {
+                  final property = _properties[i];
+                  return PropertyCard(
+                    property: property,
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.propertyDetail,
+                      arguments: PropertyDetailArgs.of(property),
+                    ),
+                  );
+                },
+                childCount: _properties.length,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _empty(AuthProvider auth) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: AppTheme.primaryGreen.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.favorite_border,
-                size: 56,
-                color: AppTheme.primaryGreen.withValues(alpha: 0.5),
-              ),
-            ),
-            const SizedBox(height: 24),
+            Icon(Icons.favorite_border,
+                size: 60, color: Theme.of(context).disabledColor),
+            const SizedBox(height: 20),
             Text(
-              'Aucun favori pour l\'instant',
-              style: Theme.of(context).textTheme.titleMedium,
-              textAlign: TextAlign.center,
+              'Aucun favori',
+              style: GoogleFonts.poppins(
+                  fontSize: 17, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
-              'Parcourez les annonces et ajoutez vos logements preferes',
-              style: Theme.of(context).textTheme.bodySmall,
+              'Appuyez sur le coeur d\'une annonce pour la retrouver ici.',
               textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 14, height: 1.6),
             ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () {
-                // Navigate to explore / property list
-                Navigator.pushReplacementNamed(context, '/properties');
-              },
-              icon: const Icon(Icons.explore, size: 18),
-              label: const Text('Explorer'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _favorites.length,
-      itemBuilder: (context, index) {
-        final property = _favorites[index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Dismissible(
-            key: ValueKey(property.id),
-            direction: DismissDirection.endToStart,
-            onDismissed: (_) => _removeFavorite(index),
-            background: Container(
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.only(right: 20),
-              decoration: BoxDecoration(
-                color: AppTheme.errorColor,
-                borderRadius:
-                    BorderRadius.circular(AppTheme.radiusDefault),
-              ),
-              child: const Icon(
-                Icons.delete_outline,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-            child: _FavoriteCard(property: property),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ══════════════════════════════════════════════
-//  FAVORITE CARD
-// ══════════════════════════════════════════════
-class _FavoriteCard extends StatelessWidget {
-  final Property property;
-
-  const _FavoriteCard({required this.property});
-
-  static final NumberFormat _fmt = NumberFormat.decimalPattern('fr_FR');
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = [
-      AppTheme.primaryGreen.withValues(alpha: 0.3),
-      AppTheme.secondaryOrange.withValues(alpha: 0.3),
-      Colors.blue.withValues(alpha: 0.3),
-      Colors.purple.withValues(alpha: 0.3),
-    ];
-    final color = colors[property.id.hashCode % colors.length];
-
-    return GestureDetector(
-      onTap: () => Navigator.pushNamed(
-        context,
-        '/property-detail',
-        arguments: property,
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(AppTheme.radiusDefault),
-          boxShadow: AppTheme.softShadow,
-        ),
-        child: Row(
-          children: [
-            // Image placeholder
-            ClipRRect(
-              borderRadius: const BorderRadius.horizontal(
-                left: Radius.circular(AppTheme.radiusDefault),
-              ),
-              child: Container(
-                width: 110,
-                height: 110,
-                color: color,
-                child: Stack(
-                  children: [
-                    Center(
-                      child: Icon(
-                        Icons.home_outlined,
-                        size: 36,
-                        color: Colors.white.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    // Favorite heart
-                    const Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Icon(
-                        Icons.favorite,
-                        size: 20,
-                        color: Colors.red,
-                      ),
-                    ),
-                  ],
+            if (auth.isGuest) ...[
+              const SizedBox(height: 20),
+              Text(
+                'Vos favoris sont enregistres sur cet appareil. Creez un '
+                'compte pour les retrouver partout.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  height: 1.5,
+                  color: Theme.of(context).hintColor,
                 ),
               ),
-            ),
-            // Info
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      property.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.location_on_outlined,
-                          size: 14,
-                          color: AppTheme.primaryGreen,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            '${property.quarter}, ${property.city}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        if (property.rooms > 0) ...[
-                          const Icon(Icons.bed_outlined,
-                              size: 14, color: Colors.grey),
-                          const SizedBox(width: 2),
-                          Text('${property.rooms}',
-                              style:
-                                  Theme.of(context).textTheme.bodySmall),
-                          const SizedBox(width: 10),
-                        ],
-                        const Icon(Icons.square_foot,
-                            size: 14, color: Colors.grey),
-                        const SizedBox(width: 2),
-                        Text('${property.surface.round()}m²',
-                            style:
-                                Theme.of(context).textTheme.bodySmall),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${_fmt.format(property.price)} F CFA/mois',
-                      style: const TextStyle(
-                        color: AppTheme.primaryGreen,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () =>
+                    Navigator.pushNamed(context, AppRoutes.auth),
+                child: Text('Creer un compte',
+                    style: GoogleFonts.inter(fontSize: 14)),
               ),
-            ),
+            ],
           ],
         ),
       ),

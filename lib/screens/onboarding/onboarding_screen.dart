@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:my_home_ci/config/routes.dart';
 import 'package:my_home_ci/config/theme.dart';
+import 'package:my_home_ci/providers/settings_provider.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -47,7 +49,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  void _navigateToAuth() {
+  Future<void> _navigateToAuth() async {
+    // Sans cet enregistrement, le splash relit `onboardingSeen` a false et
+    // rejoue les trois pages a chaque lancement de l'application.
+    await context.read<SettingsProvider>().markOnboardingSeen();
+    if (!mounted) return;
     Navigator.pushReplacementNamed(context, AppRoutes.auth);
   }
 

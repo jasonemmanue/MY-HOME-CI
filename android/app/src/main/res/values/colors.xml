@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Fond de l'icone adaptative, genere par flutter_launcher_icons depuis
+         `adaptive_icon_background` du pubspec. Ne pas retirer : le manifeste
+         mipmap-anydpi-v26/ic_launcher.xml y fait reference et le build echoue
+         sans elle. -->
     <color name="ic_launcher_background">#2E7D5B</color>
+
+    <!-- Teinte des notifications FCM : vert emeraude de la charte. -->
+    <color name="notification_color">#2E7D5B</color>
 </resources>

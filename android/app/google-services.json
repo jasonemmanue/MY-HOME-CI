@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "735118521165",
+    "project_id": "my-home-ci",
+    "storage_bucket": "my-home-ci.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:735118521165:android:a738b71d767646bd70bd04",
+        "android_client_info": {
+          "package_name": "com.myhomeci.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC44VM_1adwgrItRoRZB4pEaI7bODBz_rA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

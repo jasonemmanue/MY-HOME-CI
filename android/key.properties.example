@@ -1,0 +1,17 @@
+# Modele pour android/key.properties — NE PAS VERSIONNER le fichier reel.
+#
+# 1. Generer le keystore (une seule fois, a conserver precieusement :
+#    le perdre interdit toute mise a jour de l'application sur Google Play) :
+#
+#    keytool -genkey -v -keystore C:/cles/my-home-ci.jks \
+#      -keyalg RSA -keysize 2048 -validity 10000 -alias my-home-ci
+#
+# 2. Copier ce fichier en android/key.properties et renseigner les valeurs.
+#
+# storeFile doit utiliser des barres obliques : l'antislash est un caractere
+# d'echappement dans un fichier .properties, et "C:\cles\..." serait mal lu.
+
+storePassword=VOTRE_MOT_DE_PASSE_KEYSTORE
+keyPassword=VOTRE_MOT_DE_PASSE_CLE
+keyAlias=my-home-ci
+storeFile=C:/cles/my-home-ci.jks

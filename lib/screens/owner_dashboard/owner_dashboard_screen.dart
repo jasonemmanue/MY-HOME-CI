@@ -1,291 +1,470 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../config/constants.dart';
 import '../../config/routes.dart';
 import '../../config/theme.dart';
 import '../../models/property.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/property_service.dart';
+import '../property_detail/property_detail_screen.dart';
 
-class OwnerDashboardScreen extends StatelessWidget {
+/// Espace propriétaire : statistiques, liste des biens et actions rapides.
+class OwnerDashboardScreen extends StatefulWidget {
   const OwnerDashboardScreen({super.key});
 
   @override
+  State<OwnerDashboardScreen> createState() => _OwnerDashboardScreenState();
+}
+
+class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
+  PropertyStatus? _filter;
+
+  @override
   Widget build(BuildContext context) {
-    final properties = Property.mockProperties.take(4).toList();
+    final auth = context.watch<AuthProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (!auth.isSignedIn) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Espace proprietaire')),
+        body: const Center(child: Text('Connexion requise.')),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mon Espace Proprietaire'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildStatsRow(context),
-            const SizedBox(height: 20),
-            _buildPublishButton(context),
-            const SizedBox(height: 28),
-            Text(
-              'Mes annonces',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 12),
-            ...properties.asMap().entries.map(
-                  (entry) => _buildPropertyCard(context, entry.value, entry.key),
-                ),
-          ],
+        title: Text(
+          'Mes annonces',
+          style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w600),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.pushNamed(context, AppRoutes.publish),
+        backgroundColor: AppTheme.primaryGreen,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: Text('Publier',
+            style: GoogleFonts.poppins(
+                fontSize: 14, fontWeight: FontWeight.w600)),
+      ),
+      body: StreamBuilder<List<Property>>(
+        stream: PropertyService.instance.watchByOwner(auth.uid!),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final all = snapshot.data ?? const <Property>[];
+          final visible = _filter == null
+              ? all
+              : all.where((p) => p.status == _filter).toList();
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+            children: [
+              _stats(all, isDark),
+              const SizedBox(height: 18),
+              if (!auth.user!.isVerified) ...[
+                _verificationPrompt(isDark),
+                const SizedBox(height: 18),
+              ],
+              _statusFilters(all, isDark),
+              const SizedBox(height: 14),
+              if (visible.isEmpty)
+                _empty(isDark)
+              else
+                ...visible.map((p) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _propertyTile(p, isDark),
+                    )),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildStatsRow(BuildContext context) {
+  Widget _stats(List<Property> properties, bool isDark) {
+    final active =
+        properties.where((p) => p.status == PropertyStatus.active).length;
+    final views = properties.fold<int>(0, (sum, p) => sum + p.views);
+    final favorites =
+        properties.fold<int>(0, (sum, p) => sum + p.favoritesCount);
+
     return Row(
       children: [
-        _buildStatCard(
-          context,
-          icon: Icons.home_rounded,
-          value: '8',
-          label: 'Annonces',
-          color: AppTheme.primaryGreen,
-        ),
+        _statCard(isDark, Icons.home_work_outlined, '$active', 'Actives'),
         const SizedBox(width: 12),
-        _buildStatCard(
-          context,
-          icon: Icons.visibility_rounded,
-          value: '1 247',
-          label: 'Vues',
-          color: AppTheme.secondaryOrange,
-        ),
+        _statCard(isDark, Icons.visibility_outlined, '$views', 'Vues'),
         const SizedBox(width: 12),
-        _buildStatCard(
-          context,
-          icon: Icons.chat_bubble_rounded,
-          value: '23',
-          label: 'Messages',
-          color: const Color(0xFF5B9BD5),
-        ),
+        _statCard(isDark, Icons.favorite_outline, '$favorites', 'Favoris'),
       ],
     );
   }
 
-  Widget _buildStatCard(
-    BuildContext context, {
-    required IconData icon,
-    required String value,
-    required String label,
-    required Color color,
-  }) {
+  Widget _statCard(bool isDark, IconData icon, String value, String label) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+          color: isDark ? AppTheme.cardDark : const Color(0xFFF7F9F8),
           borderRadius: BorderRadius.circular(AppTheme.radiusDefault),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Column(
           children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: AppTheme.textSecondaryLight,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            Icon(icon, size: 21, color: AppTheme.primaryGreen),
+            const SizedBox(height: 7),
+            Text(value,
+                style: GoogleFonts.poppins(
+                    fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(label,
+                style: GoogleFonts.inter(
+                    fontSize: 11.5, color: Theme.of(context).hintColor)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPublishButton(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () {
-          Navigator.pushNamed(context, AppRoutes.publish);
-        },
-        icon: const Icon(Icons.add_circle_outline, size: 22),
-        label: const Text('Publier une annonce'),
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+  /// Un propriétaire non vérifié voit ses annonces publiées, mais sans badge —
+  /// et le badge est le principal levier de confiance côté locataire.
+  Widget _verificationPrompt(bool isDark) {
+    return InkWell(
+      onTap: () => Navigator.pushNamed(context, AppRoutes.verification),
+      borderRadius: BorderRadius.circular(AppTheme.radiusDefault),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.secondaryOrange.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(AppTheme.radiusDefault),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.verified_outlined,
+                size: 22, color: AppTheme.secondaryOrange),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Faites verifier votre profil pour afficher le badge '
+                '« Proprietaire verifie » sur vos annonces.',
+                style: GoogleFonts.inter(fontSize: 12.5, height: 1.45),
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                size: 20, color: Theme.of(context).hintColor),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildPropertyCard(
-      BuildContext context, Property property, int index) {
-    // Statut alterne pour la demo
-    final statuses = ['Active', 'Louee', 'En attente', 'Active'];
-    final status = statuses[index % statuses.length];
-    final statusColor = switch (status) {
-      'Active' => AppTheme.successColor,
-      'Louee' => AppTheme.secondaryOrange,
-      _ => AppTheme.textSecondaryLight,
-    };
+  Widget _statusFilters(List<Property> all, bool isDark) {
+    final counts = <PropertyStatus, int>{};
+    for (final p in all) {
+      counts[p.status] = (counts[p.status] ?? 0) + 1;
+    }
 
+    final entries = <({PropertyStatus? status, String label, int count})>[
+      (status: null, label: 'Toutes', count: all.length),
+      ...PropertyStatus.values
+          .where((s) => (counts[s] ?? 0) > 0)
+          .map((s) => (status: s, label: s.label, count: counts[s]!)),
+    ];
+
+    return SizedBox(
+      height: 34,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: entries.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final entry = entries[i];
+          final selected = _filter == entry.status;
+          return GestureDetector(
+            onTap: () => setState(() => _filter = entry.status),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppTheme.primaryGreen
+                    : (isDark ? AppTheme.cardDark : const Color(0xFFF0F3F1)),
+                borderRadius: BorderRadius.circular(17),
+              ),
+              child: Text(
+                '${entry.label} (${entry.count})',
+                style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: selected ? Colors.white : null,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _propertyTile(Property property, bool isDark) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(AppTheme.radiusDefault),
-        boxShadow: AppTheme.softShadow,
+        border: Border.all(
+          color: isDark ? AppTheme.dividerDark : AppTheme.dividerLight,
+        ),
       ),
       child: Column(
         children: [
-          // Image + overlay statut
-          Stack(
-            children: [
-              Container(
-                height: 140,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withValues(alpha: 0.1),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(AppTheme.radiusDefault),
+          InkWell(
+            onTap: () => Navigator.pushNamed(
+              context,
+              AppRoutes.propertyDetail,
+              arguments: PropertyDetailArgs.of(property),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius:
+                        BorderRadius.circular(AppTheme.radiusSmall),
+                    child: SizedBox(
+                      width: 64,
+                      height: 64,
+                      child: property.coverImage == null
+                          ? Container(
+                              color: AppTheme.primaryGreen
+                                  .withValues(alpha: 0.15),
+                              child: const Icon(Icons.home_rounded,
+                                  color: AppTheme.primaryGreen),
+                            )
+                          : CachedNetworkImage(
+                              imageUrl: property.coverImage!,
+                              fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) => Container(
+                                color: AppTheme.primaryGreen
+                                    .withValues(alpha: 0.15),
+                                child: const Icon(Icons.home_rounded,
+                                    color: AppTheme.primaryGreen),
+                              ),
+                            ),
+                    ),
                   ),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.home_rounded,
-                    size: 48,
-                    color: AppTheme.primaryGreen,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            _statusChip(property.status),
+                            if (property.isBoosted) ...[
+                              const SizedBox(width: 6),
+                              const Icon(Icons.trending_up,
+                                  size: 15, color: AppTheme.secondaryOrange),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          property.title.isEmpty
+                              ? 'Brouillon sans titre'
+                              : property.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                              fontSize: 13.5, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          AppConstants.formatPricePerMonth(property.price),
+                          style: GoogleFonts.inter(
+                              fontSize: 12.5, color: AppTheme.primaryGreen),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.visibility_outlined,
+                                size: 13,
+                                color: Theme.of(context).hintColor),
+                            const SizedBox(width: 3),
+                            Text('${property.views}',
+                                style: GoogleFonts.inter(
+                                    fontSize: 11.5,
+                                    color: Theme.of(context).hintColor)),
+                            const SizedBox(width: 12),
+                            Icon(Icons.favorite_outline,
+                                size: 13,
+                                color: Theme.of(context).hintColor),
+                            const SizedBox(width: 3),
+                            Text('${property.favoritesCount}',
+                                style: GoogleFonts.inter(
+                                    fontSize: 11.5,
+                                    color: Theme.of(context).hintColor)),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
-              Positioned(
-                top: 10,
-                right: 10,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    status,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          // Infos
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  property.title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  AppConstants.formatPricePerMonth(property.price),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.primaryGreen,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${property.views} vues',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondaryLight,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Actions rapides
-                Row(
-                  children: [
-                    _buildActionButton(
-                      icon: Icons.edit_outlined,
-                      label: 'Modifier',
-                      onTap: () {},
-                    ),
-                    const SizedBox(width: 8),
-                    _buildActionButton(
-                      icon: Icons.archive_outlined,
-                      label: 'Archiver',
-                      onTap: () {},
-                    ),
-                    const SizedBox(width: 8),
-                    _buildActionButton(
-                      icon: Icons.check_circle_outline,
-                      label: 'Louee',
-                      onTap: () {},
-                    ),
-                  ],
-                ),
-              ],
             ),
           ),
+          if (property.status == PropertyStatus.rejected &&
+              property.rejectionReason != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: Text(
+                'Motif : ${property.rejectionReason}',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+          Divider(
+            height: 1,
+            color: isDark ? AppTheme.dividerDark : AppTheme.dividerLight,
+          ),
+          _actions(property),
         ],
       ),
     );
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppTheme.dividerLight),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: AppTheme.textSecondaryLight),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textSecondaryLight,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+  Widget _actions(Property property) {
+    Widget action(IconData icon, String label, VoidCallback? onTap) {
+      return Expanded(
+        child: TextButton.icon(
+          onPressed: onTap,
+          icon: Icon(icon, size: 17),
+          label: Text(label, style: GoogleFonts.inter(fontSize: 12)),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            foregroundColor: Theme.of(context).colorScheme.onSurface,
           ),
         ),
+      );
+    }
+
+    return Row(
+      children: [
+        action(Icons.edit_outlined, 'Modifier',
+            () => Navigator.pushNamed(context, AppRoutes.publish,
+                arguments: property)),
+        if (property.status == PropertyStatus.active)
+          action(Icons.check_circle_outline, 'Loue',
+              () => _confirm(
+                    'Marquer comme loue ?',
+                    'L\'annonce n\'apparaitra plus dans les resultats.',
+                    () => PropertyService.instance.markAsRented(property.id),
+                  ))
+        else if (property.status == PropertyStatus.draft)
+          action(Icons.publish_outlined, 'Publier',
+              property.isPublishable
+                  ? () => _submit(property)
+                  : () => _snack(
+                      'Completez l\'annonce (titre, description, photos, '
+                      'localisation) avant de la publier.'))
+        else if (property.status == PropertyStatus.rented ||
+            property.status == PropertyStatus.archived)
+          action(Icons.replay, 'Republier',
+              () => PropertyService.instance.republish(property.id))
+        else
+          action(Icons.hourglass_empty, 'En attente', null),
+        action(
+          Icons.delete_outline,
+          'Supprimer',
+          () => _confirm(
+            'Supprimer cette annonce ?',
+            'Cette action est definitive.',
+            () => PropertyService.instance.delete(property.id),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _submit(Property property) async {
+    await PropertyService.instance.submitForReview(property.id);
+    _snack('Annonce envoyee en moderation. Vous serez notifie apres examen.');
+  }
+
+  Future<void> _confirm(
+      String title, String message, Future<void> Function() action) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Confirmer')),
+        ],
+      ),
+    );
+    if (confirmed == true) await action();
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ));
+  }
+
+  Widget _statusChip(PropertyStatus status) {
+    final color = switch (status) {
+      PropertyStatus.active => AppTheme.primaryGreen,
+      PropertyStatus.pending => AppTheme.secondaryOrange,
+      PropertyStatus.rejected => const Color(0xFFD64545),
+      PropertyStatus.rented => const Color(0xFF1565C0),
+      _ => Colors.grey,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        status.label,
+        style: GoogleFonts.inter(
+            fontSize: 10.5, fontWeight: FontWeight.w600, color: color),
+      ),
+    );
+  }
+
+  Widget _empty(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        children: [
+          Icon(Icons.home_work_outlined,
+              size: 56, color: Theme.of(context).disabledColor),
+          const SizedBox(height: 16),
+          Text(
+            _filter == null
+                ? 'Aucune annonce.\nPubliez votre premier logement.'
+                : 'Aucune annonce dans cette categorie.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(fontSize: 14, height: 1.6),
+          ),
+        ],
       ),
     );
   }

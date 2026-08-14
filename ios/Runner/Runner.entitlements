@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Configuration DEBUG : jetons APNs de bac a sable. -->
+	<key>aps-environment</key>
+	<string>development</string>
+
+	<!-- Sign in with Apple. Obligatoire des lors qu'une connexion tierce
+	     (Google) est proposee — App Store Review Guideline 4.8. Sans cette
+	     capacite, l'appel echoue avec une erreur d'autorisation opaque. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+
+	<!-- Universal Links : ouverture directe d'une annonce partagee.
+	     Requiert un fichier apple-app-site-association servi en HTTPS a la
+	     racine .well-known du domaine. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:myhomeci.ci</string>
+	</array>
+</dict>
+</plist>
