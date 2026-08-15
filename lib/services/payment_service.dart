@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
+import '../config/payment_config.dart';
+
 /// Services payants proposes par la plateforme.
 ///
 /// Volontairement limite a deux : le Pack Pro et la mise en avant. La grille
@@ -36,17 +38,11 @@ enum PaidProduct {
   }
 }
 
-/// Operateurs Mobile Money acceptes par GeniusPay en Cote d'Ivoire.
-enum MobileMoneyOperator {
-  wave('wave', 'Wave'),
-  orange('orange_money', 'Orange Money'),
-  mtn('mtn_money', 'MTN Money'),
-  moov('moov_money', 'Moov Money');
-
-  final String code;
-  final String label;
-  const MobileMoneyOperator(this.code, this.label);
-}
+// Les operateurs Mobile Money vivent dans `mobile_money_service.dart`, et non
+// ici : un enum est conserve tel quel par le compilateur, y compris ses
+// libelles. Declares dans ce fichier — que le build iOS compile pour le
+// parcours email — les chaines « Wave », « Orange Money », « MTN Money » et
+// « Moov Money » se retrouveraient dans l'IPA soumis a Apple.
 
 /// Etat d'une transaction, tel qu'ecrit par les Cloud Functions.
 enum PaymentStatus {
@@ -96,7 +92,7 @@ class PaymentResult {
 /// l'application se contente de constater l'activation.
 ///
 /// C'est pourquoi [isInAppPaymentAllowed] gouverne l'affichage, et pourquoi
-/// [initiateMobileMoneyPayment] refuse de s'executer sur iOS : la garde est
+/// `MobileMoneyService.initiate` refuse de s'executer sur iOS : la garde est
 /// dans le service, pas seulement dans l'interface, pour qu'un futur ecran ne
 /// puisse pas contourner la regle par inadvertance.
 class PaymentService {
@@ -108,66 +104,12 @@ class PaymentService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   /// `false` sur iOS. Toute interface tarifaire doit tester ce drapeau.
-  bool get isInAppPaymentAllowed => kIsWeb || !Platform.isIOS;
-
-  // ── Parcours Android / Web ──────────────────────────────────────────────
-
-  /// Lance un paiement Mobile Money et renvoie l'URL de finalisation.
-  Future<PaymentResult> initiateMobileMoneyPayment({
-    required PaidProduct product,
-    required MobileMoneyOperator operator,
-    required String phone,
-    String? targetId,
-    Map<String, dynamic>? params,
-  }) async {
-    if (!isInAppPaymentAllowed) {
-      // Garde volontairement stricte : sur iOS, ce chemin ne doit jamais etre
-      // atteignable, meme par erreur de branchement d'un ecran.
-      return const PaymentResult(
-        success: false,
-        message: 'Ce parcours n\'est pas disponible sur cet appareil.',
-      );
-    }
-
-    try {
-      final callable = _functions.httpsCallable(
-        'initiatePayment',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
-      );
-
-      final response = await callable.call<Map<String, dynamic>>({
-        'product': product.code,
-        'operator': operator.code,
-        'phone': phone.trim(),
-        if (targetId != null) 'targetId': targetId,
-        if (params != null) 'params': params,
-      });
-
-      final data = response.data;
-      if (data['success'] == true) {
-        return PaymentResult(
-          success: true,
-          reference: data['reference']?.toString(),
-          paymentUrl: data['paymentUrl']?.toString(),
-          message: 'Paiement initie.',
-        );
-      }
-      return PaymentResult(
-        success: false,
-        message: data['error']?.toString() ?? 'Paiement impossible.',
-      );
-    } on FirebaseFunctionsException catch (e) {
-      return PaymentResult(
-        success: false,
-        message: e.message ?? 'Le service de paiement est indisponible.',
-      );
-    } catch (e) {
-      return PaymentResult(
-        success: false,
-        message: 'Erreur reseau. Verifiez votre connexion.',
-      );
-    }
-  }
+  ///
+  /// Double garde volontaire : [kMobileMoneyEnabled] est une constante de
+  /// compilation qui retire le code du binaire iOS, et le test de plateforme
+  /// protege le cas ou un build iOS serait lance sans le `--dart-define`.
+  bool get isInAppPaymentAllowed =>
+      kMobileMoneyEnabled && (kIsWeb || !Platform.isIOS);
 
   /// Suit l'etat d'une transaction jusqu'a son issue.
   ///

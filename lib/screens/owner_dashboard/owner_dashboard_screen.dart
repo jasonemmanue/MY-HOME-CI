@@ -8,7 +8,9 @@ import '../../config/routes.dart';
 import '../../config/theme.dart';
 import '../../models/property.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/payment_service.dart';
 import '../../services/property_service.dart';
+import '../payment/payment_entry.dart';
 import '../property_detail/property_detail_screen.dart';
 
 /// Espace propriétaire : statistiques, liste des biens et actions rapides.
@@ -69,6 +71,10 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
               const SizedBox(height: 18),
               if (!auth.user!.isVerified) ...[
                 _verificationPrompt(isDark),
+                const SizedBox(height: 18),
+              ],
+              if (!auth.user!.isPro) ...[
+                _proPrompt(isDark),
                 const SizedBox(height: 18),
               ],
               _statusFilters(all, isDark),
@@ -151,6 +157,50 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                 'Faites verifier votre profil pour afficher le badge '
                 '« Proprietaire verifie » sur vos annonces.',
                 style: GoogleFonts.inter(fontSize: 12.5, height: 1.45),
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                size: 20, color: Theme.of(context).hintColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Acces a l'Espace Pro.
+  ///
+  /// Le libelle decrit le service, jamais son tarif : cet encart s'affiche
+  /// aussi sur iOS, ou toute mention commerciale ferait rejeter l'application.
+  /// Le prix n'apparait que dans le parcours Android, ou sur la page web.
+  Widget _proPrompt(bool isDark) {
+    return InkWell(
+      onTap: () =>
+          PaymentEntry.start(context, product: PaidProduct.pro),
+      borderRadius: BorderRadius.circular(AppTheme.radiusDefault),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.primaryGreen.withValues(alpha: isDark ? 0.16 : 0.08),
+          borderRadius: BorderRadius.circular(AppTheme.radiusDefault),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.workspace_premium_outlined,
+                size: 22, color: AppTheme.primaryGreen),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Espace Pro',
+                      style: GoogleFonts.poppins(
+                          fontSize: 13.5, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Annonces illimitees, badge et statistiques detaillees.',
+                    style: GoogleFonts.inter(fontSize: 12.5, height: 1.4),
+                  ),
+                ],
               ),
             ),
             Icon(Icons.chevron_right,
@@ -378,6 +428,18 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
               () => PropertyService.instance.republish(property.id))
         else
           action(Icons.hourglass_empty, 'En attente', null),
+        // La mise en avant n'a de sens que sur une annonce visible, et il
+        // serait absurde de la revendre a une annonce deja en tete.
+        if (property.status == PropertyStatus.active && !property.isBoosted)
+          action(
+            Icons.trending_up,
+            'En avant',
+            () => PaymentEntry.start(
+              context,
+              product: PaidProduct.boost,
+              targetId: property.id,
+            ),
+          ),
         action(
           Icons.delete_outline,
           'Supprimer',

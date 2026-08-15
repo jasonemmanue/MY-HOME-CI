@@ -9,8 +9,10 @@ import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../services/payment_service.dart';
 import '../../services/user_service.dart';
 import '../legal/legal_screen.dart';
+import '../payment/payment_entry.dart';
 
 /// Profil et paramètres.
 class ProfileScreen extends StatefulWidget {
@@ -83,6 +85,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 subtitle: 'Obtenez le badge « Proprietaire verifie »',
                 onTap: () =>
                     Navigator.pushNamed(context, AppRoutes.verification),
+              ),
+            // Aucun tarif dans le libelle : cette entree existe aussi sur iOS.
+            if (!auth.user!.isPro)
+              _tile(
+                icon: Icons.workspace_premium_outlined,
+                title: 'Espace Pro',
+                subtitle: 'Annonces illimitees et statistiques detaillees',
+                onTap: () =>
+                    PaymentEntry.start(context, product: PaidProduct.pro),
               ),
           ],
           _sectionTitle('Mon activite'),

@@ -53,6 +53,37 @@ definitions:
         cd ios
         pod install --repo-update
 
+    - &audit_payment_traces
+      name: Audit des traces de paiement dans le binaire iOS
+      script: |
+        # Verifie sur le binaire REELLEMENT produit qu'aucune trace du parcours
+        # Mobile Money n'y figure. Relire le code ne prouve rien : seul le
+        # resultat de la compilation compte, et c'est lui qu'Apple recoit.
+        #
+        # « FCFA » n'est volontairement PAS dans la liste : les loyers des
+        # annonces sont affiches dans cette devise, ce qui est legitime et sans
+        # rapport avec l'achat d'un service numerique.
+        set -e
+        BIN=$(find build/ios -name 'App' -path '*App.framework*' -type f | head -1)
+        if [ -z "$BIN" ]; then
+          echo "Binaire Dart introuvable — audit impossible, build interrompu."
+          exit 1
+        fi
+        echo "Audit de : $BIN"
+
+        INTERDITS="Orange Money|MTN Money|Moov Money|Mobile Money|geniuspay|Numero Mobile Money|Numero a debiter|Payer |initiatePayment"
+        TROUVES=$(strings "$BIN" | grep -E "$INTERDITS" || true)
+
+        if [ -n "$TROUVES" ]; then
+          echo "❌ Traces de paiement detectees dans le binaire iOS :"
+          echo "$TROUVES" | sort -u
+          echo ""
+          echo "Le drapeau --dart-define=MOBILE_MONEY=false est probablement"
+          echo "absent, ou un ecran commun importe mobile_money_service.dart."
+          exit 1
+        fi
+        echo "✅ Aucune trace du parcours Mobile Money dans le binaire iOS."
+
 workflows:
 
   # ── Verification de compilation, sans signature ────────────────────────
@@ -84,7 +115,11 @@ workflows:
       - *write_maps_key
       - *pod_install
       - name: Build iOS (sans signature)
-        script: flutter build ios --release --no-codesign
+        # --dart-define=MOBILE_MONEY=false : voir le commentaire du workflow
+        # TestFlight. La verification de compilation doit porter sur le meme
+        # code que le binaire publie, sans quoi elle ne prouve rien.
+        script: flutter build ios --release --no-codesign --dart-define=MOBILE_MONEY=false
+      - *audit_payment_traces
     artifacts:
       - build/ios/iphoneos/Runner.app
       - flutter_drive.log
@@ -125,7 +160,7 @@ workflows:
           # `--simulator` produit un binaire x86_64/arm64 non signé destiné au
           # simulateur. Il ne s'installe pas sur un appareil physique : c'est
           # attendu, et cela évite tout besoin de certificat.
-          flutter build ios --simulator --debug
+          flutter build ios --simulator --debug --dart-define=MOBILE_MONEY=false
       - name: Archive du .app
         script: |
           cd build/ios/iphonesimulator
@@ -194,9 +229,20 @@ workflows:
         script: xcode-project use-profiles
       - name: Build IPA
         script: |
+          # --dart-define=MOBILE_MONEY=false retire du binaire tout le parcours
+          # Mobile Money : ecran de paiement, montants, noms d'operateurs.
+          # C'est une constante de compilation, donc le compilateur AOT elimine
+          # le code mort — les chaines ne sont pas seulement masquees, elles
+          # sont absentes de l'IPA. Sur iOS il ne reste que la demande d'envoi
+          # d'un email (App Store 3.1.1).
+          #
+          # Ne JAMAIS retirer ce drapeau : un build sans lui embarquerait un
+          # parcours de paiement externe et serait rejete a la revue.
           flutter build ipa --release \
+            --dart-define=MOBILE_MONEY=false \
             --build-number=$NEW_BUILD_NUMBER \
             --export-options-plist=/Users/builder/export_options.plist
+      - *audit_payment_traces
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
