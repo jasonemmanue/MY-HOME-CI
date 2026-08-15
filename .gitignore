@@ -72,3 +72,6 @@ ios/Pods/
 ios/.symlinks/
 ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
+
+# Fichiers temporaires Word (verrous d'edition)
+~$*.docx
