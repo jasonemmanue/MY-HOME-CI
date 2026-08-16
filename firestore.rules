@@ -123,12 +123,26 @@ service cloud.firestore {
           && request.resource.data.views == resource.data.views
         )
         // Cas 2 — n'importe qui (visiteur inclus) incremente le compteur de
-        // vues ou de favoris, et rien d'autre.
+        // vues, d'exactement un. Se contenter de restreindre les champs
+        // modifiables laissait n'importe quel visiteur ecrire la valeur de son
+        // choix : remettre a zero les vues d'un concurrent, ou s'en attribuer
+        // un million. L'application n'ecrit jamais autre chose qu'un
+        // `increment(1)`, la contrainte ne lui coute rien.
         || (
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['views', 'favoritesCount'])
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
+          && request.resource.data.views == resource.data.views + 1
         )
-        // Cas 3 — moderation.
+        // Cas 3 — mise en favori ou retrait : un pas dans un sens ou l'autre,
+        // et jamais en dessous de zero.
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['favoritesCount'])
+          && request.resource.data.favoritesCount >= 0
+          && (
+            request.resource.data.favoritesCount == resource.data.favoritesCount + 1
+            || request.resource.data.favoritesCount == resource.data.favoritesCount - 1
+          )
+        )
+        // Cas 4 — moderation.
         || isAdmin();
 
       allow delete: if isPropertyOwner() || isAdmin();

@@ -226,40 +226,58 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       child: Row(
         children: [
-          OutlinedButton.icon(
-            onPressed: _openFilters,
-            icon: const Icon(Icons.tune_rounded, size: 18),
-            label: Text(
-              activeCount == 0 ? 'Filtres' : 'Filtres ($activeCount)',
-              style: GoogleFonts.inter(fontSize: 13),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor:
-                  activeCount == 0 ? null : AppTheme.primaryGreen,
-              side: BorderSide(
-                color: activeCount == 0
-                    ? (isDark ? AppTheme.dividerDark : AppTheme.dividerLight)
-                    : AppTheme.primaryGreen,
+          // Les deux boutons gardent leur largeur intrinseque, qui depend de
+          // libelles variables (« Filtres (3) », « Prix decroissant »). En
+          // 360 dp, la somme depasse la largeur disponible des qu'un filtre est
+          // actif : le Spacer recevait alors une largeur negative et la barre
+          // debordait. Les faire defiler horizontalement absorbe le cas long
+          // sans tronquer le texte, et se comporte comme un Spacer sinon.
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _openFilters,
+                    icon: const Icon(Icons.tune_rounded, size: 18),
+                    label: Text(
+                      activeCount == 0 ? 'Filtres' : 'Filtres ($activeCount)',
+                      style: GoogleFonts.inter(fontSize: 13),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor:
+                          activeCount == 0 ? null : AppTheme.primaryGreen,
+                      side: BorderSide(
+                        color: activeCount == 0
+                            ? (isDark
+                                ? AppTheme.dividerDark
+                                : AppTheme.dividerLight)
+                            : AppTheme.primaryGreen,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: _openSort,
+                    icon: const Icon(Icons.swap_vert_rounded, size: 18),
+                    label: Text(
+                      AppConstants.sortOptions[provider.filters.sort] ??
+                          'Trier',
+                      style: GoogleFonts.inter(fontSize: 13),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                        color:
+                            isDark ? AppTheme.dividerDark : AppTheme.dividerLight,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                  ),
+                ],
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
             ),
           ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            onPressed: _openSort,
-            icon: const Icon(Icons.swap_vert_rounded, size: 18),
-            label: Text(
-              AppConstants.sortOptions[provider.filters.sort] ?? 'Trier',
-              style: GoogleFonts.inter(fontSize: 13),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(
-                color: isDark ? AppTheme.dividerDark : AppTheme.dividerLight,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-            ),
-          ),
-          const Spacer(),
           if (activeCount > 0)
             TextButton(
               onPressed: provider.clearFilters,

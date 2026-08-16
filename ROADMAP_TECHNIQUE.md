@@ -49,7 +49,8 @@
 | Firebase | **Connecté** — watchers temps réel + actions de modération |
 | Auth admin | Réelle, custom claim `admin` vérifié |
 | Données mock | **Aucune** |
-| Déploiement | **Aucun** |
+| Conteneurisation | `Dockerfile` multi-étapes validé — image 303 Mo, sain sous `docker run` |
+| Déploiement | **Aucun hébergement** — l'image existe, le domaine non |
 
 **Conclusion : la construction est faite. Ce qui reste est de la mise en service —
 clés, signature, déploiement, tests de sécurité et démarches administratives.**
@@ -58,6 +59,15 @@ clés, signature, déploiement, tests de sécurité et démarches administrative
 
 ## A. Bloquants — rien ne peut être publié sans ça
 
+> **Point du 16/08/2026** — recette sur appareil réel (Samsung SM A256E,
+> Android 16) et back-office exécuté en conteneur Docker. Quatre défauts
+> corrigés, le backend est passé en service. Détail au bas du document.
+
+- [x] ~~**Déploiement du backend**~~ — `firestore.rules`, `storage.rules`, les
+      **18** index composites et les **11** Cloud Functions sont déployés sur
+      `my-home-ci`. Les cinq secrets (3 GeniusPay, 2 Gmail) sont dans Secret
+      Manager. `functions/.env.example` documente désormais la répartition
+      entre `.env`, Secret Manager et `.secret.local`.
 - [ ] **`android/key.properties` + keystore de release.** En son absence, le build
       release retombe sur la clé de débogage : Google Play refuse l'AAB.
       Le keystore doit aussi être uploadé dans Codemagic sous le nom
@@ -75,31 +85,49 @@ clés, signature, déploiement, tests de sécurité et démarches administrative
       ni `ios/Flutter/Keys.xcconfig`. Symptôme : carte grise, sans message
       d'erreur. Restreindre les clés par package name + SHA-1 (Android) et
       bundle ID (iOS), sinon la facture est imprévisible.
-- [ ] **Secrets Cloud Functions.** 3 secrets GeniusPay
-      (`GENIUSPAY_API_KEY`, `GENIUSPAY_SECRET_KEY`, `GENIUSPAY_WEBHOOK_SECRET`)
-      et 2 secrets Gmail (`GMAIL_SENDER_EMAIL`, `GMAIL_APP_PASSWORD`) à
-      renseigner avant déploiement. Créer le `functions/.env.example` que le
-      `.gitignore` prévoit déjà mais qui n'existe pas.
-- [ ] **Déploiement du backend** : `firebase deploy --only firestore:rules,firestore:indexes,storage,functions`.
+- [x] ~~**Secrets Cloud Functions.**~~ Les cinq sont posés dans Secret Manager.
+      ⚠️ Ils ne doivent **jamais** figurer aussi dans `functions/.env` : Cloud
+      Run rejette alors le déploiement (« Secret environment variable overlaps
+      non secret environment variable »). Voir `functions/.env.example`.
 - [ ] **Déploiement du back-office** sur `admin.myhomeci.ci` — c'est l'URL
       codée en dur dans `WEB_PAY_BASE_URL` (`functions/index.js`). Sans elle,
       les liens de paiement envoyés par email ne mènent nulle part.
-- [ ] **Premier administrateur** : appeler `bootstrapFirstAdmin` une fois, puis
-      vérifier que la fonction se verrouille (elle ne doit pas pouvoir servir
-      deux fois).
-- [ ] Passage du projet Firebase au **plan Blaze** (obligatoire pour les Functions).
+- [x] ~~**Premier administrateur**~~ — créé le 16/08/2026 :
+      `admin@myhomeci.ci`, uid `PJJDC5IvIzZdwHxLQ2H9a6qnE1I2`, custom claim
+      `admin` vérifié sur un jeton réémis après l'appel.
+      ⚠️ **Reste à vérifier** : que `bootstrapFirstAdmin` refuse bien un second
+      appel. Le code la verrouille (elle cherche un admin existant et lève
+      `permission-denied`), mais l'exécution n'a pas pu être rejouée.
+      À confirmer, puis retirer la fonction du déploiement — elle n'a plus
+      d'usage, et une porte d'amorçage qui reste ouverte est une porte.
+- [x] ~~Passage du projet Firebase au **plan Blaze**~~ — effectif, les 11
+      fonctions v2 sont en service.
+- [ ] **Seed des données** : la base est vide. L'accueil affiche « Aucune
+      annonce publiée » et la rangée « Quartiers populaires » retombe sur la
+      liste statique de `AppConstants`. Peupler `quarters/` puis quelques
+      annonces réelles.
 
 ---
 
 ## B. Sécurité — à faire avant d'ouvrir la base à de vrais utilisateurs
 
-- [ ] **Tests des règles Firestore** (`@firebase/rules-unit-testing`) —
-      aujourd'hui **inexistants**. C'est le trou le plus risqué du projet :
-      une règle non testée est une fuite de données. Couvrir au minimum :
-      lecture d'une annonce `draft` par un tiers, écriture sur `properties`
-      d'un autre propriétaire, lecture d'une conversation dont on n'est pas
-      participant, écriture directe du champ `role` par un utilisateur.
+- [x] ~~**Tests des règles Firestore**~~ — `firestore-tests/`, **63 tests** au
+      vert contre l'émulateur (`npm test`). Couvrent la consultation sans
+      compte, l'étanchéité des annonces non publiées, l'écriture sur les
+      annonces d'autrui, l'escalade de privilèges sur les cinq champs protégés,
+      les coordonnées privées, les conversations, l'argent, la modération, les
+      notifications et le refus par défaut.
+      **Une faille a été trouvée et fermée au passage** : la règle sur les
+      compteurs restreignait les *champs* modifiables sans contraindre leur
+      *valeur*. N'importe quel visiteur pouvait remettre à zéro les vues d'un
+      concurrent ou s'attribuer un million de vues et de favoris — le tri par
+      popularité s'en serait trouvé faussé. Les incréments sont désormais
+      limités à ±1, un champ à la fois, et `favoritesCount` ne peut plus passer
+      sous zéro.
 - [ ] Tests des `storage.rules` (upload dans le dossier d'un autre utilisateur).
+      Le banc `firestore-tests/` accueille ce cas sans modification :
+      `initializeTestEnvironment` accepte une clé `storage` à côté de
+      `firestore`.
 - [ ] **App Check en mode enforced** sur Firestore, Storage et Functions.
       L'activation est déjà codée côté app (`main.dart`), il reste à enregistrer
       les empreintes Play Integrity / DeviceCheck et à basculer l'enforcement.
@@ -148,6 +176,12 @@ mode invité.
 ---
 
 ## E. Conformité stores
+
+> Tout ce que ce bloc réclame en images, textes, documents juridiques et accès
+> est spécifié lot par lot, avec les formats exacts, dans
+> **`DOSSIER_FOURNITURE_MY_HOME_CI.docx`** (généré par
+> `node generate_prestataires_docx.js`). C'est le document à transmettre aux
+> prestataires.
 
 ### Google Play
 - [ ] Compte Google Play Developer (**25 $ une fois**) + **vérification d'identité**
@@ -229,6 +263,38 @@ les lancer **en parallèle du bloc A**, pas à la fin.
 | Config Firebase | Versionnée dans le dépôt |
 | Modération | Publication après validation admin (`pending` → `active`) |
 | Région Functions | `us-central1` |
+
+## Recette du 16/08/2026 — défauts trouvés et corrigés
+
+Compilation Android sur appareil réel (SM A256E, Android 16, arm64) et
+back-office exécuté en conteneur Docker (`myhomeci-admin:local`, Node 22
+Alpine, sortie `standalone`, 303 Mo, utilisateur non privilégié).
+
+| # | Défaut | Cause | Correctif |
+|---|---|---|---|
+| 1 | L'application **plantait au lancement**, écran blanc puis fermeture | `namespace` renommé en `com.myhomeci.app` sans déplacer `MainActivity.kt`, resté en `com.myhomeci.my_home_ci`. Le manifeste résout `.MainActivity` contre le namespace → `ClassNotFoundException`. Le build, lui, réussissait | Fichier déplacé dans `com/myhomeci/app/`, ancien paquet supprimé |
+| 2 | `PERMISSION_DENIED` sur `properties` et `quarters` — aucune annonce visible | Les règles du dépôt n'avaient jamais été déployées | `firebase deploy --only firestore:rules,storage` |
+| 3 | `FAILED_PRECONDITION` sur `quarters` — repli permanent sur la liste statique | Index composite `(isPopular, sortOrder)` absent de `firestore.indexes.json` | Index ajouté puis déployé (18 au total) |
+| 4 | Débordement de 4,9 px sur la barre de filtres ; « Creer un compte » tronqué en « Creer un comp » | Deux boutons à largeur intrinsèque + `Spacer` en 360 dp ; retrait de 16 dp par défaut des `Tab` | Barre rendue défilante horizontalement ; `labelPadding` ramené à 8 dp |
+| 5 | `npm run lint` en échec (3 erreurs `react-hooks/set-state-in-effect`) | `setState` synchrones en corps d'effet dans `annonces` et `conversations` | États dérivés. Corrige au passage une course : une réponse lente écrasait les messages de la conversation entre-temps sélectionnée |
+
+Vérifié après correction : 29 tests unitaires au vert, `flutter analyze` sans
+erreur ni avertissement, `tsc --noEmit` et `npm run lint` propres, les cinq
+onglets parcourus sans exception, `getWebPaymentStatus` répond
+`{"success":false,"error":"Lien invalide"}` sur un jeton inconnu.
+
+**Non corrigé, faute de clé** : `MAPS_API_KEY` absente de
+`android/local.properties` — l'onglet Carte s'affiche vide, seul le logo Google
+apparaît. Toute la logique (rayon, géolocalisation, compteur) fonctionne.
+
+### Seconde passe, même jour — sécurité et mise en service
+
+| Travail | Résultat |
+|---|---|
+| Premier administrateur | `admin@myhomeci.ci` créé, custom claim `admin` vérifié sur un jeton réémis |
+| Banc de test des règles | `firestore-tests/` — 63 tests, 11 suites, exécutés contre l'émulateur |
+| Faille des compteurs | Trouvée par les tests, fermée, redéployée : incréments limités à ±1, un champ à la fois |
+| Dossier de fourniture | `DOSSIER_FOURNITURE_MY_HOME_CI.docx` — 6 lots, formats exacts, à remettre aux prestataires |
 
 ## Décisions restant à trancher
 

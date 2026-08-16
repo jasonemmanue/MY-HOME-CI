@@ -66,6 +66,16 @@ functions/node_modules/
 functions/.env
 functions/.env.*
 !functions/.env.example
+# Valeurs des secrets pour les emulateurs. Nom impose par firebase-tools ;
+# il ne commence pas par « .env », les deux lignes ci-dessus ne le couvrent pas.
+functions/.secret.local
+
+# Tests des regles de securite
+firestore-tests/node_modules/
+firestore-debug.log
+**/firestore-debug.log
+ui-debug.log
+firebase-debug.log
 
 # Sorties de build iOS
 ios/Pods/

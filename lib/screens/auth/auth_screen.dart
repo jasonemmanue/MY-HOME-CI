@@ -394,6 +394,11 @@ class _AuthScreenState extends State<AuthScreen>
           borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
+        // Le retrait horizontal par defaut d'un Tab est de 16 dp de chaque
+        // cote. En 360 dp, il ne reste alors pas assez de place pour
+        // « Creer un compte » en Poppins 14 semi-gras : le libelle etait
+        // tronque en « Creer un comp ».
+        labelPadding: const EdgeInsets.symmetric(horizontal: 8),
         dividerColor: Colors.transparent,
         labelColor: Colors.white,
         unselectedLabelColor: AppTheme.primaryGreen,

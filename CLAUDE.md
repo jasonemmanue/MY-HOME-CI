@@ -76,6 +76,9 @@ functions/
   geniuspay.js               # client HTTP GeniusPay + verification de signature
 test/
   widget_test.dart           # tests unitaires geohash / mots-cles / regles de publication
+  payment_config_test.dart   # normalisation des numeros ivoiriens, operateurs
+firestore-tests/
+  firestore-rules.test.js    # 63 tests des regles de securite, contre l'emulateur
 ```
 
 ## Backend Firebase
@@ -97,6 +100,16 @@ Statuts d'annonce : `draft | pending | active | rented | archived | rejected`.
 Roles utilisateur : `tenant | owner | admin` (admin porte aussi par un **custom
 claim** `admin`, seul element sur lequel s'appuient les regles).
 
+Le premier administrateur existe depuis le 16/08/2026 : `admin@myhomeci.ci`,
+uid `PJJDC5IvIzZdwHxLQ2H9a6qnE1I2`. `bootstrapFirstAdmin` ne sert donc plus a
+rien — tout nouvel admin passe desormais par `setAdminRole`, appelable depuis
+le back-office par un administrateur existant.
+
+**Les regles sont testees** : `firestore-tests/` contient 63 tests executes
+contre l'emulateur (`npm test`). Toute modification de `firestore.rules` doit
+etre accompagnee du test correspondant, sinon la regle part en production sans
+que personne ne sache ce qu'elle autorise.
+
 **Cloud Functions** (`functions/index.js`) :
 - Paiement : `initiatePayment` (app), `initiatePaymentFromWeb` + `getWebPaymentStatus`
   (page web iOS), `geniusPayWebhook`, `sendActivationEmail`
@@ -117,9 +130,16 @@ deployer, ne pas se contenter du lien propose dans la console.
 11 Cloud Functions, le back-office connecte, la conformite manifeste Android /
 Info.plist iOS, les workflows Codemagic. **Il ne reste plus de donnees mock.**
 
-**Reste a faire** : voir `ROADMAP_TECHNIQUE.md`, qui liste les points bloquants
-(signature Android, Google Sign-In iOS, clefs Maps, deploiement du back-office,
-tests des regles Firestore).
+**En service depuis le 16/08/2026** : le backend est deploye sur `my-home-ci` —
+regles Firestore et Storage, 18 index composites, les 11 fonctions v2, et les
+cinq secrets dans Secret Manager. L'application a ete recettee sur appareil
+reel (Samsung SM A256E, Android 16).
+
+**Reste a faire** : voir `ROADMAP_TECHNIQUE.md`. Les deux points qui bloquent
+un usage reel sont l'appel unique a `bootstrapFirstAdmin` (sans premier admin,
+aucune annonce ne peut etre validee) et le seed des donnees, la base etant
+vide. Restent ensuite la signature Android, Google Sign-In iOS, la clef Maps,
+l'hebergement du back-office et les tests des regles Firestore.
 
 ## Conventions
 - Langue du code et des identifiants : anglais
@@ -139,7 +159,12 @@ tests des regles Firestore).
 | `android/key.properties` | signature de release | l'AAB est signe avec la clef de debogage et Google Play le refuse |
 | `android/local.properties` → `MAPS_API_KEY` | carte Android | carte grise, sans erreur |
 | `ios/Flutter/Keys.xcconfig` → `MAPS_API_KEY_IOS` | carte iOS | idem |
-| `functions/.env` | secrets GeniusPay (3) et Gmail (2) | les paiements et l'email d'activation echouent |
+| `functions/.env` | variables **non secretes** (`WEB_PAY_BASE_URL`) | les liens de paiement pointent sur le domaine par defaut |
+| `functions/.secret.local` | les 5 secrets, **pour les emulateurs seulement** | paiements et email indisponibles sous emulateur |
+
+En production les cinq secrets viennent de Secret Manager
+(`firebase functions:secrets:set`), jamais de `.env` : les mettre aux deux
+endroits fait echouer le deploiement Cloud Run. Voir `functions/.env.example`.
 
 `google-services.json` et `GoogleService-Info.plist` sont, eux, versionnes.
 
@@ -148,7 +173,10 @@ tests des regles Firestore).
 flutter pub get                              # Dependances
 flutter run                                  # Lancer l'app
 flutter analyze lib --no-fatal-infos         # Analyse statique (ce que fait la CI)
-flutter test                                 # Tests unitaires
+flutter test                                 # Tests unitaires Dart
+
+cd firestore-tests && npm test               # Regles de securite (lance l'emulateur)
+node generate_prestataires_docx.js           # Dossier de fourniture (.docx)
 flutter build appbundle --release            # AAB Google Play (exige key.properties)
 firebase deploy --only firestore:rules       # Regles Firestore
 firebase deploy --only firestore:indexes     # Index
