@@ -33,8 +33,8 @@ du schema de donnees impacte les trois : verifier `lib/models/`,
 - **Recherche geospatiale** : geohash maison (`lib/utils/geohash.dart`) —
   Firestore ne sait pas faire de requete radiale
 - **State management** : Provider (4 providers)
-- **Auth** : email/mot de passe, OTP SMS, Google Sign-In, Sign in with Apple,
-  mode invite
+- **Auth** : email/mot de passe, Google Sign-In, Sign in with Apple, mode invite.
+  **Pas de verification par SMS** — voir « Telephone » ci-dessous
 - **Paiements** : GeniusPay (Wave, Orange Money, MTN Money, Moov Money)
 - **CI/CD** : Codemagic (`codemagic.yaml`) — pas de GitHub Actions
 
@@ -55,7 +55,7 @@ lib/
     auth_provider.dart  favorites_provider.dart
     property_provider.dart  settings_provider.dart
   screens/
-    splash/  onboarding/  auth/ (auth_screen + otp_screen)
+    splash/  onboarding/  auth/ (auth_screen)
     home/ (home_screen + home_tab)  map/  property_list/  property_detail/
     publish_property/  chat/ (liste + detail)  favorites/  notifications/
     owner_dashboard/  legal/
@@ -120,13 +120,44 @@ que personne ne sache ce qu'elle autorise.
 **Regle d'or paiement** : les montants vivent cote serveur (`PRODUCTS` dans
 `index.js`). Ne jamais accepter un montant envoye par le client.
 
+## Telephone — coordonnee de paiement, pas identifiant
+
+Depuis le 17/08/2026, **le numero n'est plus verifie**. La connexion par SMS a
+ete retiree : ecran, route et methodes du service ont disparu, et le fournisseur
+Phone doit etre desactive dans la console Firebase pour fermer le robinet.
+L'OTP etait le principal poste de cout variable du projet — un SMS par
+tentative, sur un marche ou le volume est le modele.
+
+Le numero reste demande a l'inscription, avec un role precis : c'est le
+**numero a debiter propose par defaut** dans le parcours Mobile Money.
+Consequences a tenir :
+
+| Regle | Ou |
+|---|---|
+| Un seul format en base : international, `+225XXXXXXXXXX` | `auth_service.dart`, `edit_profile_screen.dart` — via `normalizeIvorianPhone` |
+| Les champs de saisie affichent l'indicatif a part et n'acceptent que les 10 chiffres locaux | `localPhoneDigits` fait la conversion dans les deux sens |
+| Le numero est valide **des l'inscription**, pas seulement au paiement | un numero approximatif se paierait par un echec de transaction |
+| L'operateur est preselectionne d'apres le prefixe, jamais impose | `operatorForPhone` — renvoie `null` sur Wave et les prefixes non attribues |
+| La frappe de l'utilisateur prime toujours sur la valeur prerenseignee | `_loadDefaultPhone` dans `mobile_money_screen.dart` |
+| Un compte cree par Google ou Apple n'a **pas** de numero : le champ reste vide, l'utilisateur saisit | c'est le seul cas ou rien n'est propose ; il peut l'enregistrer depuis `edit_profile_screen.dart` |
+
+Les cinq fonctions de numero vivent dans `lib/config/payment_config.dart` et
+sont couvertes par `test/payment_config_test.dart`.
+
+**Le parcours web `/pay/[token]` ne prerenseigne volontairement rien.**
+`getWebPaymentStatus` s'en tient au libelle, a la description, au montant et au
+statut — « ni uid, ni email », dit son commentaire. Y ajouter le numero le
+rendrait lisible par quiconque recoit le lien, alors que ce lien est un simple
+jeton porteur transmis par email. L'utilisateur saisit donc son numero sur
+cette page, comme il choisit son operateur.
+
 **Index** : 17 index composites dans `firestore.indexes.json`. Toute nouvelle
 requete combinant `where` + `orderBy` en exige un — l'ajouter au fichier et
 deployer, ne pas se contenter du lien propose dans la console.
 
 ## Etat d'avancement
 
-**Fait** : les 20 ecrans, les 13 services, les regles Firestore et Storage, les
+**Fait** : les 19 ecrans, les 13 services, les regles Firestore et Storage, les
 11 Cloud Functions, le back-office connecte, la conformite manifeste Android /
 Info.plist iOS, les workflows Codemagic. **Il ne reste plus de donnees mock.**
 

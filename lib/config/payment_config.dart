@@ -80,3 +80,34 @@ bool phoneMatchesOperator(String localOrFullNumber, String operatorCode) {
   final local = normalized.substring(kCountryDialCode.length);
   return prefixes.any(local.startsWith);
 }
+
+/// Les dix chiffres locaux d'un numero, sans indicatif.
+///
+/// Le numero est stocke au format international (`+2250700000000`) tandis que
+/// les champs de saisie affichent l'indicatif a part et n'acceptent que les
+/// chiffres : sans cette conversion, prerenseigner un champ depuis le profil
+/// y ecrirait « 2250700000000 », que le validateur rejetterait.
+String? localPhoneDigits(String? stored) {
+  if (stored == null || stored.trim().isEmpty) return null;
+  final normalized = normalizeIvorianPhone(stored);
+  if (normalized == null) return null;
+  return normalized.substring(kCountryDialCode.length);
+}
+
+/// Devine l'operateur d'un numero d'apres son prefixe.
+///
+/// Renvoie `null` des que le prefixe n'est pas attribue de facon exclusive —
+/// ce qui inclut Wave, dont les comptes s'adossent a un numero de n'importe
+/// quel reseau. Sert uniquement a preselectionner un choix que l'utilisateur
+/// reste libre de changer : deviner mal ne coute rien, imposer couterait un
+/// paiement perdu.
+String? operatorForPhone(String? phone) {
+  final local = localPhoneDigits(phone);
+  if (local == null) return null;
+
+  for (final entry in kOperatorPrefixes.entries) {
+    if (entry.value.isEmpty) continue;
+    if (entry.value.any(local.startsWith)) return entry.key;
+  }
+  return null;
+}

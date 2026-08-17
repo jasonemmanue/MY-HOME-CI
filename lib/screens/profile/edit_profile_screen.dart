@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/payment_config.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
@@ -46,7 +47,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final contact = await UserService.instance.fetchContact(user.id);
     if (!mounted) return;
     setState(() {
-      _phone.text = contact.phone ?? '';
+      // Le numero est stocke au format international, le champ affiche
+      // l'indicatif a part : sans conversion, l'utilisateur relirait
+      // « 2250700000000 » derriere un prefixe « +225 » deja affiche.
+      _phone.text = localPhoneDigits(contact.phone) ?? contact.phone ?? '';
       _email.text = contact.email ?? '';
       _loading = false;
     });
@@ -79,7 +83,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       await UserService.instance.updateProfile(uid: uid, name: _name.text);
       await UserService.instance.updateContact(
         uid: uid,
-        phone: _phone.text,
+        // Un seul format en base, quelle que soit la facon dont il a ete saisi.
+        phone: normalizeIvorianPhone(_phone.text) ?? _phone.text,
         email: _email.text,
       );
       await auth.refresh();
@@ -154,9 +159,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       keyboardType: TextInputType.phone,
                       decoration: const InputDecoration(
                         labelText: 'Telephone',
+                        prefixText: '$kCountryDialCode ',
                         prefixIcon: Icon(Icons.phone_outlined, size: 20),
-                        helperText: 'Jamais visible par les autres utilisateurs',
+                        helperText: 'Jamais visible par les autres utilisateurs. '
+                            'Propose par defaut lors d\'un paiement.',
+                        helperMaxLines: 3,
                       ),
+                      // Le champ etait libre : un numero mal forme n'avait pas
+                      // de consequence tant qu'il ne servait qu'a la fiche.
+                      // Depuis qu'il alimente le parcours de paiement, il doit
+                      // etre exploitable tel quel.
+                      validator: (v) {
+                        final saisie = (v ?? '').trim();
+                        if (saisie.isEmpty) return null;
+                        if (normalizeIvorianPhone(saisie) == null) {
+                          return 'Numero ivoirien a $kLocalPhoneLength chiffres attendu';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 16),
                     TextFormField(

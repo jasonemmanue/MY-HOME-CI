@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import '../config/payment_config.dart';
 import '../models/user_model.dart';
 
 /// Erreur d'authentification portant un message deja traduit en francais.
@@ -74,7 +75,11 @@ class AuthService {
         user,
         fallbackName: name.trim(),
         role: role,
-        phone: phone.trim(),
+        // Stocke au format international. Le formulaire a deja valide le
+        // numero ; normaliser ici garantit qu'un seul format existe en base,
+        // quelle que soit la voie d'entree, et que le parcours de paiement
+        // n'a jamais a deviner ce qu'il lit.
+        phone: normalizeIvorianPhone(phone) ?? phone.trim(),
         email: email.trim(),
       );
 
@@ -114,70 +119,6 @@ class AuthService {
     final user = _auth.currentUser;
     if (user == null || user.emailVerified) return;
     await user.sendEmailVerification();
-  }
-
-  // ── Telephone (OTP SMS) ─────────────────────────────────────────────────
-
-  /// Demarre la verification d'un numero.
-  ///
-  /// [onCodeSent] recoit le `verificationId` a repasser a [confirmOtp].
-  /// [onAutoVerified] ne se declenche que sur Android, ou le systeme peut lire
-  /// le SMS lui-meme — sur iOS il n'est jamais appele, l'ecran doit donc
-  /// toujours proposer la saisie manuelle.
-  Future<void> startPhoneVerification({
-    required String phoneNumber,
-    required void Function(String verificationId, int? resendToken) onCodeSent,
-    required void Function(AuthException error) onFailed,
-    void Function(PhoneAuthCredential credential)? onAutoVerified,
-    int? resendToken,
-  }) async {
-    await _auth.verifyPhoneNumber(
-      phoneNumber: _normalizePhone(phoneNumber),
-      forceResendingToken: resendToken,
-      timeout: const Duration(seconds: 60),
-      verificationCompleted: (credential) {
-        onAutoVerified?.call(credential);
-      },
-      verificationFailed: (e) {
-        onFailed(AuthException(_translate(e), code: e.code));
-      },
-      codeSent: onCodeSent,
-      codeAutoRetrievalTimeout: (_) {},
-    );
-  }
-
-  /// Valide le code recu par SMS et connecte l'utilisateur.
-  Future<UserModel> confirmOtp({
-    required String verificationId,
-    required String smsCode,
-    String? name,
-    UserRole? role,
-  }) async {
-    try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: verificationId,
-        smsCode: smsCode.trim(),
-      );
-      final cred = await _auth.signInWithCredential(credential);
-      return await _ensureUserDocument(
-        cred.user!,
-        fallbackName: name,
-        role: role,
-        phone: cred.user!.phoneNumber,
-      );
-    } on FirebaseAuthException catch (e) {
-      throw AuthException(_translate(e), code: e.code);
-    }
-  }
-
-  /// Met le numero au format E.164 attendu par Firebase.
-  /// Sans indicatif explicite, on suppose la Cote d'Ivoire (+225).
-  String _normalizePhone(String input) {
-    var p = input.replaceAll(RegExp(r'[\s\-().]'), '');
-    if (p.startsWith('+')) return p;
-    if (p.startsWith('00')) return '+${p.substring(2)}';
-    if (p.startsWith('225')) return '+$p';
-    return '+225$p';
   }
 
   // ── Google ──────────────────────────────────────────────────────────────
@@ -401,14 +342,6 @@ class AuthService {
         return 'Trop de tentatives. Reessayez dans quelques minutes.';
       case 'network-request-failed':
         return 'Connexion internet indisponible.';
-      case 'invalid-phone-number':
-        return 'Numero de telephone invalide.';
-      case 'invalid-verification-code':
-        return 'Code de verification incorrect.';
-      case 'session-expired':
-        return 'Le code a expire. Demandez-en un nouveau.';
-      case 'quota-exceeded':
-        return 'Quota SMS depasse. Reessayez plus tard.';
       case 'account-exists-with-different-credential':
         return 'Un compte existe deja avec cette adresse, via un autre mode '
             'de connexion.';

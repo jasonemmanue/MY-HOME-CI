@@ -9,7 +9,7 @@ class AppRoutes {
   static const String splash = '/splash';
   static const String onboarding = '/onboarding';
   static const String auth = '/auth';
-  static const String otp = '/otp';
+  // Pas de route OTP : le numero de telephone n'est plus verifie par SMS.
   static const String home = '/home';
   static const String map = '/map';
   static const String propertyList = '/property-list';

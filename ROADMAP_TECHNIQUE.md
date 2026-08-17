@@ -12,7 +12,7 @@
 
 | Élément | État réel |
 |---|---|
-| Écrans | 20 écrans — UI **et** logique branchées |
+| Écrans | 19 écrans — UI **et** logique branchées (l'écran OTP a été supprimé le 17/08) |
 | Modèles | 8 modèles avec `fromFirestore()` / `toFirestore()` |
 | `lib/services/` | **13 services** réellement connectés à Firebase |
 | `lib/providers/` | 4 providers (auth, favoris, annonces, réglages) |
@@ -230,6 +230,13 @@ mode invité.
 
 ## G. Exploitation
 
+- [ ] **Réviser les deux documents de budget.** `BUDGET_MY_HOME_CI.docx` et sa
+      synthèse chiffrent encore le coût des SMS OTP, devenu nul depuis la
+      suppression de la vérification par téléphone. La ligne « Moins de SMS »
+      des économies possibles n'a plus d'objet non plus : elle est acquise.
+      Les deux fichiers se régénèrent par `node generate_budget_docx.js` et
+      `node generate_budget_synthese_docx.js`.
+
 - [ ] Séparer un projet Firebase **dev** du projet de production (aujourd'hui un
       seul : `my-home-ci`).
 - [ ] Alertes de budget Firebase et Google Maps (voir le document de budget).
@@ -256,6 +263,8 @@ les lancer **en parallèle du bloc A**, pas à la fin.
 
 | Question | Décision constatée dans le code |
 |---|---|
+| Authentification | **Email / mot de passe**, plus Google et Apple. Pas de vérification du numéro |
+| Numéro de téléphone | Demandé à l'inscription, jamais vérifié, sert de **coordonnée de paiement par défaut** |
 | Recherche texte | `searchKeywords[]` + `array-contains` (pas d'Algolia) |
 | Monétisation au lancement | **Incluse** — Pack Pro 15 000 FCFA/30 j, boost 5 000 FCFA/7 j, Mobile Money via GeniusPay. Pas de publicité |
 | Paiement sur iOS | Page web externe `/pay/[token]`, lien à usage unique valable 24 h |
@@ -302,6 +311,11 @@ apparaît. Toute la logique (rayon, géolocalisation, compteur) fonctionne.
    et le risque de polluer la base de production)
 2. **Vérification propriétaire** : quelles pièces exactement, qui les traite,
    sous quel délai ?
-3. **SMS OTP** : le coût par SMS en Côte d'Ivoire est le principal poste
-   variable. Le maintient-on comme méthode d'inscription principale, ou
-   bascule-t-on l'inscription par défaut sur email + Google ?
+3. ~~**SMS OTP**~~ — **tranché le 17/08/2026 : supprimé.** L'inscription et la
+   connexion se font par email/mot de passe (plus Google et Apple). Le numéro
+   n'est plus vérifié ; il est demandé à l'inscription comme **numéro de
+   paiement Mobile Money par défaut**. Le principal poste de coût variable du
+   projet disparaît avec lui.
+   **Reste à faire côté console** : désactiver le fournisseur *Phone* dans
+   Firebase Authentication. Le code ne l'appelle plus, mais tant que le
+   fournisseur est actif, le quota SMS reste ouvert et facturable.

@@ -8,8 +8,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/constants.dart';
 import '../../config/payment_config.dart';
 import '../../config/theme.dart';
+import '../../services/auth_service.dart';
 import '../../services/mobile_money_service.dart';
 import '../../services/payment_service.dart';
+import '../../services/user_service.dart';
 
 /// Parcours Mobile Money — Android et Web uniquement.
 ///
@@ -57,6 +59,51 @@ class _MobileMoneyScreenState extends State<MobileMoneyScreen> {
   bool _submitting = false;
   String _message = '';
   StreamSubscription<PaymentStatus>? _watch;
+
+  /// Vrai tant que le numero affiche est celui du compte, non retouche.
+  /// Sert uniquement a expliquer d'ou vient la valeur prerenseignee.
+  bool _prefilledFromProfile = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDefaultPhone();
+  }
+
+  /// Prerenseigne le numero saisi a l'inscription.
+  ///
+  /// Il n'est pas verifie — la plateforme n'envoie plus de SMS — mais c'est le
+  /// numero que l'utilisateur a lui-meme designe comme sien, donc le meilleur
+  /// candidat pour un debit Mobile Money. Il reste modifiable : payer depuis
+  /// un autre numero que celui du compte est un cas courant.
+  Future<void> _loadDefaultPhone() async {
+    final uid = AuthService.instance.uid;
+    if (uid == null) return;
+
+    final contact = await UserService.instance.fetchContact(uid);
+    if (!mounted) return;
+
+    final local = localPhoneDigits(contact.phone);
+    if (local == null) return;
+
+    // L'utilisateur a pu commencer a saisir pendant la lecture : sa frappe
+    // prime toujours sur la valeur par defaut.
+    if (_phoneController.text.isNotEmpty) return;
+
+    setState(() {
+      _phoneController.text = local;
+      _prefilledFromProfile = true;
+      _operator ??= _operatorFromCode(operatorForPhone(contact.phone));
+    });
+  }
+
+  MobileMoneyOperator? _operatorFromCode(String? code) {
+    if (code == null) return null;
+    for (final op in MobileMoneyOperator.values) {
+      if (op.code == code) return op;
+    }
+    return null;
+  }
 
   @override
   void dispose() {
@@ -308,12 +355,19 @@ class _MobileMoneyScreenState extends State<MobileMoneyScreen> {
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(kLocalPhoneLength),
       ],
-      onChanged: (_) => setState(() {}),
-      decoration: const InputDecoration(
+      onChanged: (_) => setState(() {
+        // Des la premiere frappe, le numero n'est plus celui du profil.
+        _prefilledFromProfile = false;
+      }),
+      decoration: InputDecoration(
         prefixText: '$kCountryDialCode ',
         labelText: 'Numero Mobile Money',
         hintText: '0700000000',
-        prefixIcon: Icon(Icons.smartphone_outlined),
+        prefixIcon: const Icon(Icons.smartphone_outlined),
+        helperText: _prefilledFromProfile
+            ? 'Numero de votre compte. Modifiable pour ce paiement.'
+            : null,
+        helperMaxLines: 2,
       ),
       validator: (value) {
         final v = (value ?? '').trim();

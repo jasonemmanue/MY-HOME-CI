@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/payment_config.dart';
 import '../../config/routes.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
@@ -9,7 +10,6 @@ import '../../providers/auth_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
 import '../legal/legal_screen.dart';
-import 'otp_screen.dart';
 
 class AuthScreenArgs {
   final int initialTab;
@@ -18,10 +18,15 @@ class AuthScreenArgs {
 
 /// Point d'entrée de l'application.
 ///
-/// Trois voies coexistent volontairement : le mode visiteur (mis en avant,
-/// comme l'impose le cahier des charges), l'email/mot de passe, et le
-/// téléphone par OTP. S'y ajoutent Google et — sur iOS uniquement et
-/// obligatoirement — Sign in with Apple.
+/// Deux voies coexistent volontairement : le mode visiteur (mis en avant,
+/// comme l'impose le cahier des charges) et l'email/mot de passe. S'y ajoutent
+/// Google et — sur iOS uniquement et obligatoirement — Sign in with Apple.
+///
+/// La connexion par SMS a été retirée : le numéro n'est plus vérifié. Il reste
+/// demandé à l'inscription, mais comme **coordonnée de paiement par défaut**,
+/// pas comme identifiant. Ce choix supprime le principal poste de coût
+/// variable du projet — chaque OTP est un SMS facturé — et enlève un écran
+/// entre l'utilisateur et son compte.
 class AuthScreen extends StatefulWidget {
   final int initialTab;
 
@@ -183,18 +188,6 @@ class _AuthScreenState extends State<AuthScreen>
       await AnalyticsService.instance.logLogin('apple');
       _goHome();
     });
-  }
-
-  void _startPhoneLogin() {
-    Navigator.pushNamed(
-      context,
-      AppRoutes.otp,
-      arguments: OtpArgs(
-        phone: _currentTab == 1 ? _registerPhone.text : '',
-        name: _currentTab == 1 ? _registerName.text : null,
-        role: _currentTab == 1 ? _selectedRole : null,
-      ),
-    );
   }
 
   Future<void> _forgotPassword() async {
@@ -492,17 +485,6 @@ class _AuthScreenState extends State<AuthScreen>
           ),
           const SizedBox(height: 4),
           _primaryButton('Se connecter', _submitLogin),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _busy ? null : _startPhoneLogin,
-            icon: const Icon(Icons.sms_outlined, size: 20),
-            label: Text(
-              'Connexion par SMS',
-              style: GoogleFonts.inter(
-                  fontSize: 15, fontWeight: FontWeight.w500),
-            ),
-            style: _outlinedStyle(isDark),
-          ),
         ],
       ),
     );
@@ -590,11 +572,20 @@ class _AuthScreenState extends State<AuthScreen>
               labelText: 'Telephone',
               hintText: '07 00 00 00 00',
               prefixIcon: Icon(Icons.phone_outlined, size: 20),
-              prefixText: '+225 ',
+              prefixText: '$kCountryDialCode ',
+              helperText: 'Servira de numero de paiement par defaut',
+              helperMaxLines: 2,
             ),
+            // Le numero n'est plus verifie par SMS, mais il devient le numero
+            // a debiter propose lors d'un paiement : un numero approximatif se
+            // paierait par un echec de transaction, pas par un simple champ mal
+            // rempli. On exige donc le format ivoirien complet des la saisie.
             validator: (v) {
-              final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
-              if (digits.length < 8) return 'Numero de telephone invalide';
+              final saisie = (v ?? '').trim();
+              if (saisie.isEmpty) return 'Saisissez votre numero';
+              if (normalizeIvorianPhone(saisie) == null) {
+                return 'Numero ivoirien a $kLocalPhoneLength chiffres attendu';
+              }
               return null;
             },
           ),

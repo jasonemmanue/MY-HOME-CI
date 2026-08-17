@@ -72,6 +72,63 @@ void main() {
     });
   });
 
+  // Ces deux fonctions font le lien entre le numero saisi a l'inscription et
+  // le parcours de paiement, depuis que le telephone n'est plus verifie par
+  // SMS mais sert de coordonnee de debit par defaut.
+  group('localPhoneDigits', () {
+    test('retire l\'indicatif pour reremplir un champ de saisie', () {
+      expect(localPhoneDigits('+2250707123456'), '0707123456');
+      expect(localPhoneDigits('0707123456'), '0707123456');
+      expect(localPhoneDigits('00225 07 07 12 34 56'), '0707123456');
+    });
+
+    test('renvoie null plutot qu\'une valeur douteuse', () {
+      // Un champ prerempli avec un numero invalide ferait echouer la
+      // validation sur une valeur que l'utilisateur n'a pas saisie.
+      expect(localPhoneDigits(null), isNull);
+      expect(localPhoneDigits(''), isNull);
+      expect(localPhoneDigits('   '), isNull);
+      expect(localPhoneDigits('+237677123456'), isNull);
+      expect(localPhoneDigits('07123456'), isNull);
+    });
+  });
+
+  group('operatorForPhone', () {
+    test('deduit l\'operateur des prefixes exclusifs', () {
+      expect(operatorForPhone('+2250107123456'), 'moov_money');
+      expect(operatorForPhone('0507123456'), 'mtn_money');
+      expect(operatorForPhone('+225 07 07 12 34 56'), 'orange_money');
+    });
+
+    test('ne devine pas Wave', () {
+      // Wave n'a pas de plage propre : le preselectionner sur un prefixe
+      // Orange choisirait le mauvais operateur pour la majorite des paiements.
+      expect(operatorForPhone('0707123456'), isNot('wave'));
+    });
+
+    test('ne devine rien sur un prefixe non attribue', () {
+      expect(operatorForPhone('0907123456'), isNull);
+      expect(operatorForPhone('0207123456'), isNull);
+    });
+
+    test('ne devine rien sur un numero absent ou invalide', () {
+      expect(operatorForPhone(null), isNull);
+      expect(operatorForPhone(''), isNull);
+      expect(operatorForPhone('07'), isNull);
+      expect(operatorForPhone('+33612345678'), isNull);
+    });
+
+    test('l\'operateur devine reste coherent avec l\'avertissement affiche', () {
+      // Si les deux fonctions divergeaient, l'ecran preselectionnerait un
+      // operateur puis avertirait aussitot que le numero ne lui correspond pas.
+      for (final numero in ['0107123456', '0507123456', '0707123456']) {
+        final code = operatorForPhone(numero);
+        expect(code, isNotNull);
+        expect(phoneMatchesOperator(numero, code!), isTrue);
+      }
+    });
+  });
+
   group('garde de compilation', () {
     test('le parcours Mobile Money est actif par defaut', () {
       // Le defaut vaut pour Android et le web. Les builds iOS passent
