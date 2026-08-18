@@ -359,7 +359,7 @@ children.push(puce('5 a 8 photos ', "en JPEG, 1280 x 960 px minimum, ratio 4:3, 
 children.push(puce('Le type de bien ', "parmi : Studio, Appartement, Villa, Chambre, Duplex, Terrain, Bureau, Maison."));
 children.push(puce('Le loyer mensuel ', "en francs CFA, nombre entier strictement positif."));
 children.push(puce('Le quartier et la ville, ', "et l'adresse ou un point sur la carte : sans coordonnees, le logement n'apparait ni sur la carte ni dans les recherches par rayon."));
-children.push(puce('Une description ', "d'au moins 30 caracteres — en dessous, la publication est refusee par l'application."));
+children.push(puce('Une description ', "d'au moins 20 caracteres — en dessous, la publication est refusee par l'application."));
 children.push(puce('Les equipements ', "parmi la liste proposee : eau courante, electricite, climatisation, internet, parking, gardien, et les suivants."));
 children.push(puce("L'autorisation ecrite du proprietaire ", "pour la diffusion des photos et de l'adresse. Sans elle, la plateforme s'expose a une reclamation des la mise en ligne."));
 
