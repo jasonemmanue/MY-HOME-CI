@@ -72,3 +72,7 @@ ios/Pods/
 ios/.symlinks/
 ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
+
+# Clef Google Maps iOS injectee au build (Codemagic) ou en local. Ne jamais
+# versionner : elle contient MAPS_API_KEY_IOS.
+ios/Flutter/Keys.xcconfig

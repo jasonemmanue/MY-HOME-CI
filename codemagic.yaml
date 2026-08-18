@@ -22,6 +22,16 @@
 #
 #  Declenchement : pousser un tag `v1.0.0` lance la publication TestFlight.
 #  Un push sur ios ou main lance seulement la verification de compilation.
+#
+#  VERSION FLUTTER FIGEE, jamais `stable`.
+#  `stable` resout vers ce que Flutter publie le jour du build : un rebuild a
+#  l'identique peut donc echouer sans qu'une ligne ait change (typiquement
+#  `pod install` qui se met a exiger une cible de deploiement iOS plus haute).
+#  On fige donc une version precise (3.47.0 = la stable au moment de l'audit).
+#  Regle : apres un premier build vert, relever la version reellement utilisee
+#  dans le log Codemagic et la figer ici ; l'aligner aussi sur le poste de dev.
+#  `xcode: latest` reste une cible mouvante du meme type : le figer une fois
+#  qu'un build vert a revele la version d'Xcode qui fonctionne.
 # ══════════════════════════════════════════════════════════════════════════
 
 definitions:
@@ -61,7 +71,7 @@ workflows:
     max_build_duration: 45
     instance_type: mac_mini_m2
     environment:
-      flutter: stable
+      flutter: 3.47.0    # Fige la version : jamais 'stable' (rebuild non reproductible, cf. note en tete). A aligner sur la version d'un build vert.
       xcode: latest
       cocoapods: default
       groups:
@@ -105,7 +115,7 @@ workflows:
     max_build_duration: 45
     instance_type: mac_mini_m2
     environment:
-      flutter: stable
+      flutter: 3.47.0    # Fige la version : jamais 'stable' (rebuild non reproductible, cf. note en tete). A aligner sur la version d'un build vert.
       xcode: latest
       cocoapods: default
       groups:
@@ -164,7 +174,7 @@ workflows:
     integrations:
       app_store_connect: My Home CI ASC
     environment:
-      flutter: stable
+      flutter: 3.47.0    # Fige la version : jamais 'stable' (rebuild non reproductible, cf. note en tete). A aligner sur la version d'un build vert.
       xcode: latest
       cocoapods: default
       groups:
@@ -222,7 +232,7 @@ workflows:
     max_build_duration: 60
     instance_type: linux_x2
     environment:
-      flutter: stable
+      flutter: 3.47.0    # Fige la version : jamais 'stable' (rebuild non reproductible, cf. note en tete). A aligner sur la version d'un build vert.
       java: 17
       groups:
         - myhomeci
