@@ -394,7 +394,7 @@ class AuthService {
       case 'email-already-in-use':
         return 'Un compte existe deja avec cette adresse email.';
       case 'weak-password':
-        return 'Mot de passe trop faible (6 caracteres minimum).';
+        return 'Mot de passe trop faible (8 caracteres minimum).';
       case 'operation-not-allowed':
         return 'Ce mode de connexion n\'est pas active.';
       case 'too-many-requests':
