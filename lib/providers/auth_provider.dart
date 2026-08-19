@@ -39,6 +39,15 @@ class AuthProvider extends ChangeNotifier {
   bool get isOwner => _user?.isOwner ?? false;
   bool get isLoading => _state == SessionState.unknown;
 
+  /// Compte authentifie dont la fiche `users/{uid}` n'existe pas encore.
+  ///
+  /// C'est l'etat d'une connexion Google ou Apple abandonnee avant la
+  /// completion du profil. Sans ce distinguo, [isSignedIn] suffirait a envoyer
+  /// l'utilisateur sur l'accueil, ou l'application ignore son role et son
+  /// numero — et ou aucun ecran ne lui permet plus de les renseigner.
+  bool get needsProfileCompletion =>
+      _state == SessionState.signedIn && _user == null;
+
   /// Le compte a-t-il ete suspendu par la moderation ?
   bool get isSuspended => _user?.isSuspended ?? false;
 

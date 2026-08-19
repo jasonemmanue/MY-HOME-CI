@@ -98,6 +98,9 @@ class _SplashScreenState extends State<SplashScreen>
     final String destination;
     if (!settings.onboardingSeen) {
       destination = AppRoutes.onboarding;
+    } else if (auth.needsProfileCompletion) {
+      // Teste avant `isSignedIn`, qui est vrai lui aussi dans ce cas.
+      destination = AppRoutes.completeProfile;
     } else if (auth.isSignedIn || auth.isGuest) {
       destination = AppRoutes.home;
     } else {

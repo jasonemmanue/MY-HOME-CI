@@ -168,22 +168,39 @@ class _AuthScreenState extends State<AuthScreen>
 
   Future<void> _signInWithGoogle() {
     return _run(() async {
-      await AuthService.instance.signInWithGoogle(
+      final model = await AuthService.instance.signInWithGoogle(
         role: _currentTab == 1 ? _selectedRole : null,
       );
       await AnalyticsService.instance.logLogin('google');
-      _goHome();
+      _afterSocialSignIn(model);
     });
   }
 
   Future<void> _signInWithApple() {
     return _run(() async {
-      await AuthService.instance.signInWithApple(
+      final model = await AuthService.instance.signInWithApple(
         role: _currentTab == 1 ? _selectedRole : null,
       );
       await AnalyticsService.instance.logLogin('apple');
-      _goHome();
+      _afterSocialSignIn(model);
     });
+  }
+
+  /// Un retour nul signifie que la fiche `users/{uid}` n'existe pas encore :
+  /// Google et Apple ne transmettent ni role ni telephone, et les regles
+  /// Firestore interdisent de corriger `role` apres coup. On passe donc par
+  /// l'ecran de completion, qui cree la fiche avec les bonnes valeurs.
+  void _afterSocialSignIn(UserModel? model) {
+    if (!mounted) return;
+    if (model == null) {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.completeProfile,
+        (route) => false,
+      );
+      return;
+    }
+    _goHome();
   }
 
   void _startPhoneLogin() {

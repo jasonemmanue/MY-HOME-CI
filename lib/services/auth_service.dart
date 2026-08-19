@@ -21,6 +21,15 @@ class AuthException implements Exception {
   String toString() => message;
 }
 
+/// Signal interne : le compte est authentifie mais n'a pas encore de fiche.
+///
+/// Une exception plutot qu'un retour nul, pour que `_ensureUserDocument` garde
+/// une signature non nullable pour ses quatre autres appelants — email,
+/// telephone, et les deux voies sociales une fois le profil complete.
+class _ProfileIncomplete implements Exception {
+  const _ProfileIncomplete();
+}
+
 /// Point d'entree unique pour tout ce qui touche a l'identite.
 ///
 /// Regle structurante : un compte Firebase Auth sans document
@@ -182,7 +191,10 @@ class AuthService {
 
   // ── Google ──────────────────────────────────────────────────────────────
 
-  Future<UserModel> signInWithGoogle({UserRole? role}) async {
+  /// Renvoie `null` lorsque le profil reste a completer : le compte Firebase
+  /// existe, mais ni le role ni le telephone ne sont connus. L'appelant doit
+  /// alors afficher l'ecran de completion, seul habilite a creer la fiche.
+  Future<UserModel?> signInWithGoogle({UserRole? role}) async {
     try {
       final googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) {
@@ -199,7 +211,13 @@ class AuthService {
         fallbackName: googleUser.displayName,
         role: role,
         email: googleUser.email,
+        // Google ne fournit ni role ni telephone. Creer une fiche d'office la
+        // figerait en « locataire » sans numero, et les regles interdisent de
+        // corriger `role` ensuite.
+        createIfMissing: false,
       );
+    } on _ProfileIncomplete {
+      return null;
     } on FirebaseAuthException catch (e) {
       throw AuthException(_translate(e), code: e.code);
     }
@@ -214,7 +232,9 @@ class AuthService {
   /// est propose. Sans elle, l'app est rejetee.
   bool get isAppleSignInAvailable => !kIsWeb && Platform.isIOS;
 
-  Future<UserModel> signInWithApple({UserRole? role}) async {
+  /// Renvoie `null` lorsque le profil reste a completer, comme
+  /// [signInWithGoogle].
+  Future<UserModel?> signInWithApple({UserRole? role}) async {
     try {
       // Le nonce protege du rejeu : on envoie son empreinte SHA-256 a Apple et
       // sa valeur brute a Firebase, qui verifie la correspondance.
@@ -249,7 +269,11 @@ class AuthService {
         fallbackName: composedName.isEmpty ? null : composedName,
         role: role,
         email: appleCredential.email,
+        // Meme raison que pour Google : ni role ni telephone connus.
+        createIfMissing: false,
       );
+    } on _ProfileIncomplete {
+      return null;
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) {
         throw const AuthException('Connexion Apple annulee.');
@@ -302,15 +326,64 @@ class AuthService {
   ///
   /// Idempotent a dessein : il est appele apres chaque connexion, y compris
   /// pour un compte existant, ou il ne fait que rafraichir `lastSeenAt`.
+  /// Le compte authentifie n'a pas encore de fiche `users/{uid}`.
+  ///
+  /// C'est l'etat d'un utilisateur arrive par Google ou Apple : ces voies ne
+  /// demandent ni role ni telephone, et la fiche n'est creee qu'une fois le
+  /// profil complete. `role` etant verrouille par `noPrivilegeEscalation`
+  /// cote regles, creer une fiche « locataire » par defaut pour la corriger
+  /// ensuite serait impossible — d'ou l'attente.
+  Future<bool> get needsProfileCompletion async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    final snap = await _db.collection('users').doc(user.uid).get();
+    return !snap.exists;
+  }
+
+  /// Cree la fiche d'un compte social, une fois le role et le telephone
+  /// choisis par l'utilisateur.
+  Future<UserModel> completeProfile({
+    required String name,
+    required UserRole role,
+    required String phone,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Session expiree. Reconnectez-vous.');
+    }
+    if (role == UserRole.admin) {
+      throw const AuthException('Role invalide.');
+    }
+
+    final trimmed = name.trim();
+    if (trimmed != user.displayName) {
+      await user.updateDisplayName(trimmed);
+    }
+
+    return _ensureUserDocument(
+      user,
+      fallbackName: trimmed,
+      role: role,
+      phone: phone.trim(),
+      email: user.email,
+      createIfMissing: true,
+    );
+  }
+
   Future<UserModel> _ensureUserDocument(
     User user, {
     String? fallbackName,
     UserRole? role,
     String? phone,
     String? email,
+    bool createIfMissing = true,
   }) async {
     final ref = _db.collection('users').doc(user.uid);
     final snap = await ref.get();
+
+    if (!snap.exists && !createIfMissing) {
+      throw const _ProfileIncomplete();
+    }
 
     if (!snap.exists) {
       final model = UserModel(

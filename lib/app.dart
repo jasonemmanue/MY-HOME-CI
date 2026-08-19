@@ -10,6 +10,7 @@ import 'providers/favorites_provider.dart';
 import 'providers/property_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/auth/auth_screen.dart';
+import 'screens/auth/complete_profile_screen.dart';
 import 'screens/auth/otp_screen.dart';
 import 'screens/chat/chat_detail_screen.dart';
 import 'screens/chat/chat_list_screen.dart';
@@ -159,6 +160,9 @@ class _MyHomeCIAppState extends State<MyHomeCIApp> {
         break;
       case AppRoutes.otp:
         page = OtpScreen(args: settings.arguments as OtpArgs);
+        break;
+      case AppRoutes.completeProfile:
+        page = const CompleteProfileScreen();
         break;
       case AppRoutes.home:
         page = HomeScreen(
