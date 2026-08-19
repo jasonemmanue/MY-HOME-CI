@@ -1,4 +1,4 @@
-package com.myhomeci.my_home_ci
+package com.myhomeci.app
 
 import io.flutter.embedding.android.FlutterActivity
 
