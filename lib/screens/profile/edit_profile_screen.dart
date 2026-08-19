@@ -9,6 +9,7 @@ import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/storage_service.dart';
 import '../../services/user_service.dart';
+import '../../utils/phone.dart';
 
 /// Édition du profil : nom, photo et coordonnées privées.
 class EditProfileScreen extends StatefulWidget {
@@ -46,7 +47,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final contact = await UserService.instance.fetchContact(user.id);
     if (!mounted) return;
     setState(() {
-      _phone.text = contact.phone ?? '';
+      // Stocke en E.164 : sans retrait de l'indicatif, le champ afficherait
+      // « +225 +2250700000000 », le prefixe etant deja dans la decoration.
+      _phone.text = toLocal(contact.phone);
       _email.text = contact.email ?? '';
       _loading = false;
     });
@@ -79,7 +82,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       await UserService.instance.updateProfile(uid: uid, name: _name.text);
       await UserService.instance.updateContact(
         uid: uid,
-        phone: _phone.text,
+        phone: toE164(_phone.text) ?? '',
         email: _email.text,
       );
       await auth.refresh();
@@ -154,6 +157,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       keyboardType: TextInputType.phone,
                       decoration: const InputDecoration(
                         labelText: 'Telephone',
+                        hintText: '07 00 00 00 00',
+                        prefixText: kPhonePrefixLabel,
                         prefixIcon: Icon(Icons.phone_outlined, size: 20),
                         helperText: 'Jamais visible par les autres utilisateurs',
                       ),

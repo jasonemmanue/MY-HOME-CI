@@ -9,6 +9,7 @@ import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
+import '../../utils/phone.dart';
 import '../legal/legal_screen.dart';
 import 'otp_screen.dart';
 
@@ -603,13 +604,10 @@ class _AuthScreenState extends State<AuthScreen>
               labelText: 'Telephone',
               hintText: '07 00 00 00 00',
               prefixIcon: Icon(Icons.phone_outlined, size: 20),
-              prefixText: '+225 ',
+              prefixText: kPhonePrefixLabel,
             ),
-            validator: (v) {
-              final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
-              if (digits.length < 8) return 'Numero de telephone invalide';
-              return null;
-            },
+            validator: (v) =>
+                isPlausiblePhone(v) ? null : 'Numero de telephone invalide',
           ),
           const SizedBox(height: 16),
           TextFormField(

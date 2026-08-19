@@ -10,6 +10,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../models/user_model.dart';
+import '../utils/phone.dart';
 
 /// Erreur d'authentification portant un message deja traduit en francais.
 class AuthException implements Exception {
@@ -180,14 +181,12 @@ class AuthService {
   }
 
   /// Met le numero au format E.164 attendu par Firebase.
-  /// Sans indicatif explicite, on suppose la Cote d'Ivoire (+225).
-  String _normalizePhone(String input) {
-    var p = input.replaceAll(RegExp(r'[\s\-().]'), '');
-    if (p.startsWith('+')) return p;
-    if (p.startsWith('00')) return '+${p.substring(2)}';
-    if (p.startsWith('225')) return '+$p';
-    return '+225$p';
-  }
+  ///
+  /// Delegue a `utils/phone.dart` : la meme regle sert desormais a
+  /// l'enregistrement du profil, ou le numero doit etre stocke sous une forme
+  /// unique — c'est celle que reprendront les paiements Mobile Money.
+  String _normalizePhone(String input) =>
+      toE164(input) ?? input.trim();
 
   // ── Google ──────────────────────────────────────────────────────────────
 
@@ -401,10 +400,13 @@ class AuthService {
 
       // Coordonnees dans le sous-document prive : elles ne doivent jamais
       // apparaitre dans le profil lisible par tous.
+      // Toujours en E.164 : selon l'ecran d'origine, la meme personne serait
+      // sinon enregistree « 07 00 00 00 00 » ou « +2250700000000 », et le
+      // pre-remplissage du paiement Mobile Money deviendrait inexploitable.
       await ref.collection('private').doc('contact').set(
             UserContact(
               email: email ?? user.email,
-              phone: phone ?? user.phoneNumber,
+              phone: toE164(phone ?? user.phoneNumber),
             ).toMap(),
           );
 
@@ -418,7 +420,7 @@ class AuthService {
       await ref.collection('private').doc('contact').set(
         {
           if (email != null) 'email': email,
-          if (phone != null) 'phone': phone,
+          if (phone != null) 'phone': toE164(phone),
           'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),

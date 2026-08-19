@@ -5,6 +5,7 @@ import '../../config/routes.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../utils/phone.dart';
 
 /// Completion du profil apres une connexion Google ou Apple.
 ///
@@ -206,26 +207,20 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Telephone',
                         hintText: '07 00 00 00 00',
+                        prefixText: kPhonePrefixLabel,
                         prefixIcon: Icon(Icons.phone_outlined, size: 20),
                       ),
                       onFieldSubmitted: (_) => _submit(),
-                      validator: (v) {
-                        // Un numero ivoirien compte 10 chiffres ; on tolere un
-                        // indicatif et des separateurs, que le service
-                        // normalisera.
-                        final digits =
-                            (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-                        if (digits.length < 8) {
-                          return 'Indiquez un numero de telephone valide.';
-                        }
-                        return null;
-                      },
+                      validator: (v) => isPlausiblePhone(v)
+                          ? null
+                          : 'Indiquez un numero de telephone valide.',
                     ),
 
                     const SizedBox(height: 12),
                     Text(
                       'Votre numero reste prive : il ne s\'affiche jamais sur '
-                      'votre profil public.',
+                      'votre profil public. Il vous sera propose par defaut '
+                      'lors des paiements Mobile Money.',
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         height: 1.4,
