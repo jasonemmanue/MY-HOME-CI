@@ -66,6 +66,12 @@ functions/node_modules/
 functions/.env
 functions/.env.*
 !functions/.env.example
+# Secrets locaux de l'emulateur Firebase : ce fichier contient les clefs
+# GeniusPay et le mot de passe applicatif Gmail en clair. Un commit a deja
+# ete bloque par la protection GitHub — l'oubli n'est pas theorique.
+functions/.secret.local
+functions/.secret.*
+!functions/.secret.example
 
 # Sorties de build iOS
 ios/Pods/
