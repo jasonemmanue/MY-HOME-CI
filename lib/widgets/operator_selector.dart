@@ -90,26 +90,29 @@ class OperatorSelector extends StatelessWidget {
     return SizedBox(
       width: 34,
       height: 34,
-      child: Image.asset(
-        operateur.logoAsset,
-        fit: BoxFit.contain,
-        // Le logo officiel n'est pas encore fourni : on affiche l'initiale sur
-        // la couleur de marque plutot qu'une icone cassee.
-        errorBuilder: (_, __, ___) => Container(
-          decoration: BoxDecoration(
+      // Les logos officiels sont fournis sur un aplat de marque, non
+      // detoures : `cover` dans un cadre arrondi les rend tous identiques,
+      // la ou `contain` laisserait des marges inegales selon le fichier.
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.asset(
+          operateur.logoAsset,
+          fit: BoxFit.cover,
+          // Logo pas encore fourni : l'initiale sur la couleur de marque,
+          // plutot qu'une icone cassee.
+          errorBuilder: (_, __, ___) => Container(
             color: couleur,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            operateur.label.characters.first,
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              // Le jaune MTN est trop clair pour du blanc.
-              color: operateur == MobileMoneyOperator.mtn
-                  ? Colors.black87
-                  : Colors.white,
+            alignment: Alignment.center,
+            child: Text(
+              operateur.label.characters.first,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                // Le jaune MTN est trop clair pour du blanc.
+                color: operateur == MobileMoneyOperator.mtn
+                    ? Colors.black87
+                    : Colors.white,
+              ),
             ),
           ),
         ),
