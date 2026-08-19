@@ -12,6 +12,8 @@ import '../../config/theme.dart';
 import '../../models/property.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/analytics_service.dart';
+import '../../services/publication_quota_service.dart';
+import '../../widgets/publication_quota_banner.dart';
 import '../../services/location_service.dart';
 import '../../services/property_service.dart';
 import '../../services/storage_service.dart';
@@ -72,9 +74,24 @@ class _PublishPropertyScreenState extends State<PublishPropertyScreen> {
 
   bool get _isEditing => widget.existing != null;
 
+  /// Etat du quota, recharge quand le prix change : le montant du en depend.
+  PublicationQuota? _quota;
+  int _prixInterroge = -1;
+
+  /// Interroge le serveur, seul a connaitre le decompte reel.
+  Future<void> _chargerQuota() async {
+    final prix = int.tryParse(_priceController.text.trim()) ?? 0;
+    if (prix == _prixInterroge) return;
+    _prixInterroge = prix;
+
+    final quota = await PublicationQuotaService.instance.fetch(price: prix);
+    if (mounted) setState(() => _quota = quota);
+  }
+
   @override
   void initState() {
     super.initState();
+    _chargerQuota();
 
     final existing = widget.existing;
     if (existing != null) {
@@ -1032,8 +1049,16 @@ class _PublishPropertyScreenState extends State<PublishPropertyScreen> {
             labelText: 'Loyer mensuel',
             suffixText: 'FCFA',
           ),
-          onChanged: (_) => setState(() {}),
+          onChanged: (_) {
+            setState(() {});
+            // Le montant du vaut 5 % du prix : il doit suivre la saisie.
+            _chargerQuota();
+          },
         ),
+        if (_quota != null) ...[
+          const SizedBox(height: 18),
+          PublicationQuotaBanner(quota: _quota!),
+        ],
         if (price > 0) ...[
           const SizedBox(height: 10),
           Text(

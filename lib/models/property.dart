@@ -85,6 +85,15 @@ class Property {
   /// d'y toucher.
   final DateTime? boostedUntil;
 
+  /// Fin de la fenetre de visibilite de 30 jours.
+  ///
+  /// Posee par la Cloud Function apres decompte du quota de publication, et
+  /// interdite au client par les regles Firestore : pouvoir l'ecrire
+  /// reviendrait a prolonger sa visibilite sans payer. Pendant la fenetre, le
+  /// proprietaire modifie son annonce autant qu'il veut ; une fois echue,
+  /// l'annonce est archivee et sa republication consomme une nouvelle unite.
+  final DateTime? visibleUntil;
+
   /// Motif de rejet renseigne par la moderation, affiche au proprietaire.
   final String? rejectionReason;
 
@@ -121,6 +130,7 @@ class Property {
     this.views = 0,
     this.favoritesCount = 0,
     this.boostedUntil,
+    this.visibleUntil,
     this.rejectionReason,
     this.searchKeywords = const [],
   });
@@ -131,6 +141,16 @@ class Property {
 
   bool get isBoosted =>
       boostedUntil != null && boostedUntil!.isAfter(DateTime.now());
+
+  /// La fenetre de visibilite court-elle encore ?
+  bool get isVisibilityActive =>
+      visibleUntil != null && visibleUntil!.isAfter(DateTime.now());
+
+  /// Jours restants avant expiration, `null` hors fenetre.
+  int? get visibilityDaysLeft {
+    if (!isVisibilityActive) return null;
+    return visibleUntil!.difference(DateTime.now()).inDays;
+  }
 
   bool get hasLocation => latitude != null && longitude != null;
 
@@ -181,6 +201,7 @@ class Property {
       views: (d['views'] as num?)?.toInt() ?? 0,
       favoritesCount: (d['favoritesCount'] as num?)?.toInt() ?? 0,
       boostedUntil: _toDate(d['boostedUntil']),
+      visibleUntil: _toDate(d['visibleUntil']),
       rejectionReason: d['rejectionReason'] as String?,
       searchKeywords:
           List<String>.from(d['searchKeywords'] as List? ?? const []),
@@ -189,9 +210,11 @@ class Property {
 
   /// Payload d'ecriture.
   ///
-  /// `views`, `favoritesCount` et `boostedUntil` sont volontairement absents :
-  /// les compteurs se manipulent par `FieldValue.increment` et le boost est
-  /// pose par le serveur. Les inclure ici ecraserait des valeurs concurrentes.
+  /// `views`, `favoritesCount`, `boostedUntil` et `visibleUntil` sont
+  /// volontairement absents : les compteurs se manipulent par
+  /// `FieldValue.increment`, le boost et la fenetre de visibilite sont poses
+  /// par le serveur. Les inclure ici ecraserait des valeurs concurrentes — et
+  /// les regles refuseraient l'ecriture.
   Map<String, dynamic> toFirestore() {
     final coords = (latitude != null && longitude != null)
         ? Geohash.encode(latitude!, longitude!)
@@ -237,6 +260,9 @@ class Property {
       'views': 0,
       'favoritesCount': 0,
       'boostedUntil': null,
+      // Exige explicitement nul par les regles a la creation : c'est le
+      // serveur qui ouvrira la fenetre, apres decompte du quota.
+      'visibleUntil': null,
     };
   }
 
@@ -295,6 +321,7 @@ class Property {
     int? views,
     int? favoritesCount,
     DateTime? boostedUntil,
+    DateTime? visibleUntil,
     String? rejectionReason,
   }) {
     final lat = latitude ?? this.latitude;
@@ -329,6 +356,7 @@ class Property {
       views: views ?? this.views,
       favoritesCount: favoritesCount ?? this.favoritesCount,
       boostedUntil: boostedUntil ?? this.boostedUntil,
+      visibleUntil: visibleUntil ?? this.visibleUntil,
       rejectionReason: rejectionReason ?? this.rejectionReason,
     );
   }

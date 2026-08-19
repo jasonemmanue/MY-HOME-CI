@@ -122,7 +122,8 @@ service cloud.firestore {
         && request.resource.data.price > 0
         && request.resource.data.title is string
         && request.resource.data.title.size() >= 5
-        && request.resource.data.boostedUntil == null;
+        && request.resource.data.boostedUntil == null
+        && request.resource.data.visibleUntil == null;
 
       allow update: if
         // Cas 1 — le proprietaire modifie son annonce, sans pouvoir la
@@ -133,6 +134,10 @@ service cloud.firestore {
           && request.resource.data.status in ['draft', 'pending', 'rented', 'archived']
           && request.resource.data.boostedUntil == resource.data.boostedUntil
           && request.resource.data.views == resource.data.views
+          // `visibleUntil` est pose par la Cloud Function apres decompte du
+          // quota. Laisser le client l'ecrire reviendrait a lui laisser
+          // prolonger sa visibilite, et donc a rendre le quota decoratif.
+          && request.resource.data.visibleUntil == resource.data.visibleUntil
         )
         // Cas 2 — n'importe qui (visiteur inclus) incremente le compteur de
         // vues ou de favoris, et rien d'autre.
@@ -241,6 +246,15 @@ service cloud.firestore {
     match /quarters/{quarterId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // ── publicationQuotas (quota de publication) ───────────────────────────
+    // Ecriture exclusivement serveur : un proprietaire capable de remettre
+    // son compteur a zero publierait gratuitement sans fin. La lecture lui
+    // est ouverte pour que l'application affiche ce qu'il lui reste.
+    match /publicationQuotas/{userId} {
+      allow read: if isSelf(userId) || isAdmin();
+      allow write: if false;
     }
 
     // ── adminSettings ──────────────────────────────────────────────────────

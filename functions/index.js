@@ -12,7 +12,12 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const {
+  onDocumentCreated,
+  onDocumentUpdated,
+  onDocumentWritten,
+} = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
@@ -44,6 +49,75 @@ const PRODUCTS = {
 };
 
 const OPERATORS = ["wave", "orange_money", "mtn_money", "moov_money"];
+
+// ── Quota de publication ──────────────────────────────────────────────────
+// Chaque proprietaire dispose de quatre operations gratuites — une operation
+// etant une publication OU une mise a jour d'annonce. Au-dela, chaque geste
+// coute 5 % du prix de l'annonce, avec un plancher : une annonce affichee a
+// 0 franc, ou a un prix symbolique, ne doit pas rendre la publication
+// gratuite de fait.
+const FREE_PUBLICATION_OPERATIONS = 4;
+const PUBLICATION_FEE_RATE = 0.05;
+const PUBLICATION_FEE_MINIMUM = 500;
+
+// Une annonce reste visible 30 jours. L'unite facturee n'est donc pas le
+// geste mais la FENETRE : une fois ouverte — gratuitement au titre du quota,
+// ou apres paiement — le proprietaire modifie son annonce autant qu'il veut
+// jusqu'a son terme. Seules la publication initiale et la remise en
+// visibilite d'une annonce expiree consomment une unite.
+const VISIBILITY_DAYS = 30;
+
+/** Statuts sous lesquels une annonce est exposee au public. */
+const EXPOSED_STATUSES = ["pending", "active", "rented"];
+
+/// Champs dont la modification constitue une « mise a jour » facturable.
+/// `views`, `favoritesCount`, `boostedUntil` et `status` en sont exclus : les
+/// deux premiers sont incrementes par n'importe quel visiteur, les deux
+/// autres par un paiement ou par la moderation — aucun n'est un geste du
+/// proprietaire sur le contenu de son annonce.
+const BILLABLE_PROPERTY_FIELDS = [
+  "title", "description", "price", "type", "address", "quarter", "city",
+  "latitude", "longitude", "surface", "rooms", "bathrooms", "isFurnished",
+  "equipment", "images",
+];
+
+/** Montant du au-dela du quota, en francs CFA. */
+function publicationFee(price) {
+  const pourcentage = Math.ceil(Number(price || 0) * PUBLICATION_FEE_RATE);
+  return Math.max(pourcentage, PUBLICATION_FEE_MINIMUM);
+}
+
+/**
+ * Etat du quota d'un proprietaire.
+ *
+ * Le document `publicationQuotas/{uid}` n'est jamais ecrit par le client :
+ * les regles le lui interdisent, sans quoi il suffirait de remettre son
+ * compteur a zero pour publier gratuitement.
+ */
+async function readQuota(uid) {
+  const [quotaSnap, userSnap] = await Promise.all([
+    db.collection("publicationQuotas").doc(uid).get(),
+    db.collection("users").doc(uid).get(),
+  ]);
+
+  const q = quotaSnap.exists ? quotaSnap.data() : {};
+  const u = userSnap.exists ? userSnap.data() : {};
+
+  // `isPro` seul ne suffit pas : le pack expire, et le drapeau n'est remis a
+  // false par aucun processus. On verifie donc la date.
+  const proUntil = u.proUntil?.toDate?.() || null;
+  const isPro = u.isPro === true && (!proUntil || proUntil > new Date());
+
+  const freeUsed = Number(q.freeUsed || 0);
+  const paidCredits = Number(q.paidCredits || 0);
+
+  return {
+    isPro,
+    freeUsed,
+    freeRemaining: Math.max(0, FREE_PUBLICATION_OPERATIONS - freeUsed),
+    paidCredits,
+  };
+}
 
 /** Duree de validite d'un lien de paiement envoye par email. */
 const PAYMENT_LINK_TTL_HOURS = 24;
@@ -115,7 +189,9 @@ exports.initiatePayment = onCall(
     const uid = requireAuth(request);
     const { product, operator, phone, targetId } = request.data || {};
 
-    const config = PRODUCTS[product];
+    const config = product === "publication"
+      ? { label: "Publication d'annonce", durationDays: 0 }
+      : PRODUCTS[product];
     if (!config) {
       throw new HttpsError("invalid-argument", "Service inconnu.");
     }
@@ -139,6 +215,28 @@ exports.initiatePayment = onCall(
       }
     }
 
+    // Le montant d'une publication depend du prix de l'annonce. Il est lu
+    // dans Firestore, jamais recu du client : un tarif transmis par
+    // l'application permettrait a l'utilisateur de fixer ce qu'il paie.
+    let amount = config.amount;
+    if (product === "publication") {
+      if (!targetId) {
+        throw new HttpsError("invalid-argument", "Annonce a publier non precisee.");
+      }
+      const snap = await db.collection("properties").doc(targetId).get();
+      if (!snap.exists || snap.data().ownerId !== uid) {
+        throw new HttpsError("permission-denied", "Cette annonce ne vous appartient pas.");
+      }
+      const quota = await readQuota(uid);
+      if (quota.isPro || quota.freeRemaining > 0 || quota.paidCredits > 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Cette operation est deja couverte : aucun paiement n'est requis.",
+        );
+      }
+      amount = publicationFee(snap.data().price);
+    }
+
     const reference = generateReference(product, uid);
     const contactSnap = await db
       .collection("users").doc(uid)
@@ -153,7 +251,7 @@ exports.initiatePayment = onCall(
       uid,
       product,
       targetId: targetId || null,
-      amount: config.amount,
+      amount,
       currency: "XOF",
       operator,
       phone: normalizePhone(phone),
@@ -166,7 +264,7 @@ exports.initiatePayment = onCall(
     try {
       const result = await geniuspay.createPayment({
         reference,
-        amount: config.amount,
+        amount,
         paymentMethod: operator,
         description: config.label,
         customerEmail: email,
@@ -303,6 +401,23 @@ async function applyTransactionOutcome(reference, gatewayStatus) {
 
 /** Accorde le service paye. Appele uniquement depuis un contexte confirme. */
 async function grantProduct({ uid, product, targetId, reference }) {
+  // Le credit de publication ne figure pas dans PRODUCTS : son montant est
+  // calcule, pas catalogue.
+  if (product === "publication") {
+    await db.collection("publicationQuotas").doc(uid).set({
+      paidCredits: admin.firestore.FieldValue.increment(1),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    await notifyUser(uid, {
+      type: "publicationCredit",
+      title: "Paiement confirme",
+      body: "Vous pouvez publier ou mettre a jour votre annonce.",
+      targetId,
+    });
+    console.log(`Credit de publication accorde a ${uid} (transaction ${reference}).`);
+    return;
+  }
+
   const config = PRODUCTS[product];
   if (!config) return;
 
@@ -927,4 +1042,180 @@ exports.bootstrapFirstAdmin = onCall(async (request) => {
 
   console.log(`Premier administrateur : ${uid}`);
   return { success: true };
+});
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  QUOTA DE PUBLICATION ET VISIBILITE
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Etat du quota, pour affichage dans l'application.
+ *
+ * Le client ne calcule rien : il annonce au proprietaire ce que le serveur
+ * lui repond. Deux sources de verite divergeraient tot ou tard, et c'est
+ * l'utilisateur qui decouvrirait l'ecart au moment de payer.
+ */
+exports.getPublicationQuota = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const quota = await readQuota(uid);
+
+  // Prix facultatif : sans lui, on renvoie le plancher, ce qui suffit a
+  // afficher « a partir de 500 F ».
+  const price = Number(request.data?.price || 0);
+
+  return {
+    ...quota,
+    freeTotal: FREE_PUBLICATION_OPERATIONS,
+    feeRate: PUBLICATION_FEE_RATE,
+    feeMinimum: PUBLICATION_FEE_MINIMUM,
+    visibilityDays: VISIBILITY_DAYS,
+    requiresPayment:
+      !quota.isPro && quota.freeRemaining === 0 && quota.paidCredits === 0,
+    amountDue: publicationFee(price),
+  };
+});
+
+/**
+ * Ouvre une fenetre de visibilite et consomme une unite de quota.
+ *
+ * Le decompte se fait ici, jamais dans l'application : un compteur client
+ * repartirait de zero a la reinstallation.
+ *
+ * Ne consomment rien : la creation d'un brouillon et ses retouches, ni les
+ * modifications faites pendant une fenetre encore ouverte — c'est
+ * precisement ce que le proprietaire a acquis.
+ */
+exports.onPropertyWritten = onDocumentWritten(
+  "properties/{propertyId}",
+  async (event) => {
+    const after = event.data?.after?.data() || null;
+    if (!after) return; // suppression
+
+    const uid = after.ownerId;
+    if (!uid) return;
+
+    if (!EXPOSED_STATUSES.includes(after.status)) return;
+
+    const maintenant = Date.now();
+    const fenetre = after.visibleUntil?.toMillis?.() || 0;
+
+    // Fenetre encore ouverte : modifications libres. C'est aussi la sortie
+    // du second passage declenche par notre propre ecriture ci-dessous —
+    // sans elle, le declencheur se rappellerait indefiniment.
+    if (fenetre > maintenant) return;
+
+    const propertyId = event.params.propertyId;
+    const quota = await readQuota(uid);
+
+    const expiration = admin.firestore.Timestamp.fromDate(
+      new Date(maintenant + VISIBILITY_DAYS * 24 * 60 * 60 * 1000),
+    );
+
+    if (quota.isPro) {
+      await db.collection("properties").doc(propertyId)
+        .update({ visibleUntil: expiration });
+      return;
+    }
+
+    const ref = db.collection("publicationQuotas").doc(uid);
+
+    // Transaction : deux publications simultanees consommeraient sinon le
+    // meme credit deux fois.
+    const couvert = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const d = snap.exists ? snap.data() : {};
+      const freeUsed = Number(d.freeUsed || 0);
+      const paidCredits = Number(d.paidCredits || 0);
+
+      if (freeUsed < FREE_PUBLICATION_OPERATIONS) {
+        tx.set(ref, {
+          freeUsed: freeUsed + 1,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return { ok: true, restant: FREE_PUBLICATION_OPERATIONS - freeUsed - 1 };
+      }
+
+      if (paidCredits > 0) {
+        tx.set(ref, {
+          paidCredits: paidCredits - 1,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return { ok: true, restant: 0 };
+      }
+
+      return { ok: false, restant: 0 };
+    });
+
+    if (!couvert.ok) {
+      // Les regles Firestore auraient du refuser l'ecriture. On renvoie
+      // l'annonce en brouillon plutot que de la laisser exposee sans
+      // contrepartie, et on le journalise : c'est le signe d'un
+      // contournement ou de regles mal deployees.
+      console.warn(
+        `Publication sans couverture : ${uid}, annonce ${propertyId}.`);
+      await db.collection("properties").doc(propertyId).update({
+        status: "draft",
+        visibleUntil: null,
+      });
+      await notifyUser(uid, {
+        type: "publicationRefused",
+        title: "Publication non aboutie",
+        body: "Vos operations gratuites sont epuisees. Reglez les frais de " +
+              "publication pour rendre cette annonce visible.",
+        targetId: propertyId,
+      });
+      return;
+    }
+
+    await db.collection("properties").doc(propertyId)
+      .update({ visibleUntil: expiration });
+
+    if (couvert.restant === 0 && quota.freeRemaining > 0) {
+      await notifyUser(uid, {
+        type: "quotaExhausted",
+        title: "Publications gratuites epuisees",
+        body: `Vos ${FREE_PUBLICATION_OPERATIONS} operations gratuites sont ` +
+              "utilisees. Les suivantes coutent 5 % du prix de l'annonce, " +
+              `minimum ${PUBLICATION_FEE_MINIMUM} F.`,
+      });
+    }
+  },
+);
+
+/**
+ * Retire les annonces dont la fenetre de 30 jours est echue.
+ *
+ * Sans ce balayage, `visibleUntil` ne serait qu'indicatif : l'annonce
+ * resterait `active` et continuerait de remonter dans les recherches, la
+ * duree de visibilite n'ayant alors aucune portee reelle.
+ *
+ * Le statut retenu est `archived` et non `draft` : le proprietaire retrouve
+ * son annonce complete et la republie d'un geste, ce qui consomme une
+ * nouvelle unite de quota.
+ */
+exports.expireVisibleProperties = onSchedule("every 24 hours", async () => {
+  const maintenant = admin.firestore.Timestamp.now();
+
+  const snap = await db.collection("properties")
+    .where("status", "==", "active")
+    .where("visibleUntil", "<=", maintenant)
+    .limit(400)
+    .get();
+
+  if (snap.empty) return;
+
+  const batch = db.batch();
+  snap.docs.forEach((d) => batch.update(d.ref, { status: "archived" }));
+  await batch.commit();
+
+  await Promise.all(snap.docs.map((d) => notifyUser(d.data().ownerId, {
+    type: "propertyExpired",
+    title: "Annonce expiree",
+    body: `« ${d.data().title} » n'est plus visible apres ` +
+          `${VISIBILITY_DAYS} jours. Republiez-la pour la remettre en ligne.`,
+    targetId: d.id,
+  })));
+
+  console.log(`${snap.size} annonce(s) expiree(s).`);
 });
