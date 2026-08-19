@@ -45,6 +45,23 @@ storeFile=C:/cles/my-home-ci.jks
 d'echappement dans un fichier `.properties` : `C:\cles\my-home-ci.jks` serait
 lu comme `C:cles`, et le build echouerait sur un keystore introuvable.
 
+`keyPassword` n'est **pas** forcement different de `storePassword`. A la
+generation, `keytool` propose « appuyez sur Entree s'il s'agit du mot de passe
+du fichier de cles » : si vous avez valide par Entree, la clef a herite du mot
+de passe du magasin et les deux lignes doivent porter la meme valeur. Y mettre
+un mot de passe distinct fait echouer le build sur `Cannot recover key`, mais
+seulement a la toute derniere tache — apres une compilation complete.
+
+Pour verifier quel mot de passe ouvre la clef sans rien modifier :
+
+```bash
+keytool -certreq -alias my-home-ci -keystore C:/cles/my-home-ci.jks
+```
+
+`keytool` demande d'abord le mot de passe du magasin, puis celui de la clef.
+Une demande de certificat s'affiche si les deux sont bons ; `Cannot recover
+key` designe le second.
+
 Le fichier est couvert par `.gitignore` (`android/key.properties`, `*.jks`).
 Verifiez-le avant tout commit :
 
@@ -151,6 +168,7 @@ de signature ou de minification directement en production.
 |---|---|
 | `key.properties : propriete « X » absente` | Cle manquante dans `android/key.properties`, ou BOM UTF-8 ajoute par PowerShell |
 | `Keystore introuvable` | `storeFile` utilise des antislashs |
+| `Cannot recover key` a la tache `signReleaseBundle` | `keyPassword` incorrect. Le magasin s'ouvre (donc `storePassword` est bon), mais pas la clef — voir 1.2 |
 | Play rejette l'AAB (« signe en debug ») | `android/key.properties` absent au moment du build |
 | Carte grise en release, OK en debug | SHA-1 de release non declare sur la clef Maps |
 | Connexion Google en echec en release | SHA-1 de release absent de Firebase, ou `google-services.json` non retelecharge |

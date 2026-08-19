@@ -12,7 +12,28 @@
           "package_name": "com.myhomeci.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "735118521165-8l8s6i9r744g20cnhc9emvmr7rlbcfe0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.myhomeci.app",
+            "certificate_hash": "7d9ec43c201ef377987d181b9db214ae9571df54"
+          }
+        },
+        {
+          "client_id": "735118521165-srovvqa4jhul5evma2m90ul2ol1iv9n7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.myhomeci.app",
+            "certificate_hash": "3491974d64fb3296f2b47d071227c647e25dc505"
+          }
+        },
+        {
+          "client_id": "735118521165-8ss94mvinspnhitfjgsadn8u74bl4okl.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyC44VM_1adwgrItRoRZB4pEaI7bODBz_rA"
@@ -20,7 +41,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "735118521165-8ss94mvinspnhitfjgsadn8u74bl4okl.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "735118521165-t1tlmuqgd0j2i2665ia3v8rubs76p3fg.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.myhomeci.app"
+              }
+            }
+          ]
         }
       }
     }

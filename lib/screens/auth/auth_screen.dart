@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -826,7 +827,16 @@ class _AuthScreenState extends State<AuthScreen>
       children: [
         OutlinedButton.icon(
           onPressed: _busy ? null : _signInWithGoogle,
-          icon: const Icon(Icons.g_mobiledata, size: 28),
+          // Logo Google officiel plutot que Icons.g_mobiledata, un « G »
+          // Material monochrome que rien ne rattache a Google. Les regles
+          // d'identite visuelle de Google Sign-In imposent la marque a quatre
+          // couleurs, non recoloree : pas de ColorFilter, y compris en theme
+          // sombre ou elle reste lisible telle quelle.
+          icon: SvgPicture.asset(
+            'assets/images/google_logo.svg',
+            width: 20,
+            height: 20,
+          ),
           label: Text(
             'Continuer avec Google',
             style:
