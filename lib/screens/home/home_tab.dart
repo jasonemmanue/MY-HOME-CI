@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -448,64 +449,116 @@ class _HomeTabState extends State<HomeTab> {
         _sectionHeader(isDark, 'Quartiers populaires'),
         const SizedBox(height: 12),
         SizedBox(
-          height: 96,
+          // Plus haut que les 96 px d'origine : une photo de quartier
+          // ecrasee a la hauteur d'une simple pastille de texte ne se lit pas.
+          height: 132,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20),
             itemCount: _quarters.length,
             separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, i) {
-              final quarter = _quarters[i];
-              return GestureDetector(
-                onTap: () => _openList(
-                  quarter: quarter.name,
-                  title: quarter.name,
-                ),
-                child: Container(
-                  width: 128,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppTheme.primaryGreen.withValues(alpha: 0.9),
-                        AppTheme.primaryGreenLight.withValues(alpha: 0.75),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius:
-                        BorderRadius.circular(AppTheme.radiusDefault),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Icon(Icons.location_city,
-                          size: 20, color: Colors.white70),
-                      Text(
-                        quarter.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      if (quarter.propertyCount > 0)
-                        Text(
-                          '${quarter.propertyCount} logements',
-                          style: GoogleFonts.inter(
-                              fontSize: 11, color: Colors.white70),
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
+            itemBuilder: (context, i) => _quarterCard(_quarters[i]),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _quarterCard(Quarter quarter) {
+    return GestureDetector(
+      onTap: () => _openList(quarter: quarter.name, title: quarter.name),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppTheme.radiusDefault),
+        child: SizedBox(
+          width: 158,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _quarterImage(quarter),
+              // Voile sombre du bas : le nom du quartier est blanc et
+              // deviendrait illisible sur une photo claire — ciel de journee,
+              // facade blanche — sans ce fond degrade.
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Color(0x22000000),
+                      Color(0xCC000000),
+                    ],
+                    stops: [0.35, 0.6, 1],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      quarter.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    if (quarter.propertyCount > 0)
+                      Text(
+                        '${quarter.propertyCount} logements',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _quarterImage(Quarter quarter) {
+    final url = quarter.imageUrl;
+    if (url == null || url.isEmpty) return _quarterFallback();
+
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: BoxFit.cover,
+      placeholder: (_, __) => _quarterFallback(),
+      // Une photo hebergee hors de nos serveurs peut disparaitre ou etre
+      // renommee : on retombe sur le degrade plutot que sur une icone cassee.
+      errorWidget: (_, __, ___) => _quarterFallback(),
+    );
+  }
+
+  Widget _quarterFallback() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.primaryGreen.withValues(alpha: 0.9),
+            AppTheme.primaryGreenLight.withValues(alpha: 0.75),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: Icon(Icons.location_city, size: 20, color: Colors.white70),
+        ),
+      ),
     );
   }
 

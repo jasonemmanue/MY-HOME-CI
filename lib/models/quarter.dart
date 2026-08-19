@@ -41,6 +41,37 @@ class Quarter {
     this.sortOrder = 0,
   });
 
+  Quarter copyWith({
+    String? name,
+    String? city,
+    String? description,
+    String? imageUrl,
+    double? latitude,
+    double? longitude,
+    Map<String, int>? amenities,
+    double? safetyScore,
+    int? propertyCount,
+    int? averagePrice,
+    bool? isPopular,
+    int? sortOrder,
+  }) {
+    return Quarter(
+      id: id,
+      name: name ?? this.name,
+      city: city ?? this.city,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      amenities: amenities ?? this.amenities,
+      safetyScore: safetyScore ?? this.safetyScore,
+      propertyCount: propertyCount ?? this.propertyCount,
+      averagePrice: averagePrice ?? this.averagePrice,
+      isPopular: isPopular ?? this.isPopular,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
   /// Libelles lisibles des categories de commodites.
   static const Map<String, String> amenityLabels = {
     'shops': 'Commerces',

@@ -32,7 +32,13 @@ class QuarterService {
 
       if (snap.docs.isEmpty) return _fallback(limit);
 
-      _cache = snap.docs.map(Quarter.fromFirestore).toList();
+      // Une fiche creee cote admin sans photo retombe sur l'illustration par
+      // defaut du quartier : sans cela, peupler la collection ferait
+      // *disparaitre* les images que le repli affichait jusque-la.
+      _cache = snap.docs.map(Quarter.fromFirestore).map((q) {
+        if (q.imageUrl != null && q.imageUrl!.isNotEmpty) return q;
+        return q.copyWith(imageUrl: AppConstants.quarterImages[q.name]);
+      }).toList();
       return _cache!;
     } catch (_) {
       return _fallback(limit);
@@ -59,6 +65,7 @@ class QuarterService {
         .map((e) => Quarter(
               id: e.value.toLowerCase(),
               name: e.value,
+              imageUrl: AppConstants.quarterImages[e.value],
               isPopular: true,
               sortOrder: e.key,
             ))

@@ -48,6 +48,38 @@ class AppConstants {
     'Bingerville',
   ];
 
+  /// Photo par defaut de chaque quartier, servant tant que l'administration
+  /// n'a pas renseigne `imageUrl` dans `quarters/{id}` — la valeur Firestore
+  /// reste prioritaire, ces liens ne sont qu'un repli pour que l'accueil ne
+  /// s'affiche jamais avec une rangee de cartes vides.
+  ///
+  /// Fichiers Wikimedia Commons sous licence libre, servis via
+  /// `Special:FilePath` : l'URL suit les renommages du fichier et le
+  /// parametre `width` fait redimensionner l'image cote serveur, ce qui evite
+  /// de telecharger des originaux de plusieurs megaoctets sur mobile.
+  static const Map<String, String> quarterImages = {
+    'Cocody':
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Mairie_de_Cocody%2C_Abidjan.jpg?width=800',
+    'Plateau':
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Plateau_Abidjan_de_nuit.jpg?width=800',
+    'Marcory':
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Food_stall_in_Marcory_in_Abidjan_%281%29.JPG?width=800',
+    'Yopougon':
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Mairie_centrale_de_Yopougon_Abidjan.jpg?width=800',
+    'Treichville':
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Pont_de_Gaulle_et_Treichville%2C_Abidjan.jpg?width=800',
+    'Adjame':
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Adjame_abidjan_civ.jpg?width=800',
+    'Abobo':
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Cit%C3%A9_Sicogi_Concorde_Abobo_Pk18.jpg?width=800',
+    'Koumassi':
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Koumassi_rond-point_Philippe_Yace_Abidjan_C%C3%B4te_d%27ivoire.jpg?width=800',
+    'Port-Bouet':
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Abidjan_-_A%C3%A9roport_international_F%C3%A9lix_Houphou%C3%ABt_Boigny_vu_d%27un_avion.jpg?width=800',
+    'Bingerville':
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Passage_Jardin_Botanique%2C_Bingerville%2C_Abidjan.jpg?width=800',
+  };
+
   // ── Villes de Cote d'Ivoire ──
   static const List<String> cities = [
     'Abidjan',
