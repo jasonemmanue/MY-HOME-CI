@@ -222,51 +222,60 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
   Widget _toolbar(PropertyProvider provider, bool isDark) {
     final activeCount = provider.filters.activeCount;
 
+    // Barre defilable horizontalement : sans cela, la somme des largeurs
+    // intrinseques (Filtres + Trier + Effacer) depasse la largeur de l'ecran
+    // sur les appareils etroits et provoque un RenderFlex overflow. Un Spacer
+    // ne peut pas resorber ce depassement — il faut pouvoir faire defiler.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Row(
-        children: [
-          OutlinedButton.icon(
-            onPressed: _openFilters,
-            icon: const Icon(Icons.tune_rounded, size: 18),
-            label: Text(
-              activeCount == 0 ? 'Filtres' : 'Filtres ($activeCount)',
-              style: GoogleFonts.inter(fontSize: 13),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor:
-                  activeCount == 0 ? null : AppTheme.primaryGreen,
-              side: BorderSide(
-                color: activeCount == 0
-                    ? (isDark ? AppTheme.dividerDark : AppTheme.dividerLight)
-                    : AppTheme.primaryGreen,
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: _openFilters,
+              icon: const Icon(Icons.tune_rounded, size: 18),
+              label: Text(
+                activeCount == 0 ? 'Filtres' : 'Filtres ($activeCount)',
+                style: GoogleFonts.inter(fontSize: 13),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-            ),
-          ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            onPressed: _openSort,
-            icon: const Icon(Icons.swap_vert_rounded, size: 18),
-            label: Text(
-              AppConstants.sortOptions[provider.filters.sort] ?? 'Trier',
-              style: GoogleFonts.inter(fontSize: 13),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(
-                color: isDark ? AppTheme.dividerDark : AppTheme.dividerLight,
+              style: OutlinedButton.styleFrom(
+                foregroundColor:
+                    activeCount == 0 ? null : AppTheme.primaryGreen,
+                side: BorderSide(
+                  color: activeCount == 0
+                      ? (isDark ? AppTheme.dividerDark : AppTheme.dividerLight)
+                      : AppTheme.primaryGreen,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
             ),
-          ),
-          const Spacer(),
-          if (activeCount > 0)
-            TextButton(
-              onPressed: provider.clearFilters,
-              child: Text('Effacer',
-                  style: GoogleFonts.inter(fontSize: 12.5)),
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
+              onPressed: _openSort,
+              icon: const Icon(Icons.swap_vert_rounded, size: 18),
+              label: Text(
+                AppConstants.sortOptions[provider.filters.sort] ?? 'Trier',
+                style: GoogleFonts.inter(fontSize: 13),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(
+                  color: isDark ? AppTheme.dividerDark : AppTheme.dividerLight,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
             ),
-        ],
+            if (activeCount > 0) ...[
+              const SizedBox(width: 10),
+              TextButton(
+                onPressed: provider.clearFilters,
+                child: Text('Effacer',
+                    style: GoogleFonts.inter(fontSize: 12.5)),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
