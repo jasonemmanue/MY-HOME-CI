@@ -46,6 +46,12 @@ const PRODUCTS = {
     description: "Votre annonce apparait en tete des resultats pendant 7 jours",
     durationDays: 7,
   },
+  ad_video: {
+    amount: 1000,
+    label: "Publicite video",
+    description: "Votre video est diffusee dans l'application pendant 3 jours",
+    durationDays: 3,
+  },
 };
 
 const OPERATORS = ["wave", "orange_money", "mtn_money", "moov_money"];
@@ -205,6 +211,25 @@ exports.initiatePayment = onCall(
     // quoi activer une fois le paiement confirme.
     if (product === "boost" && !targetId) {
       throw new HttpsError("invalid-argument", "Annonce a mettre en avant non precisee.");
+    }
+    if (product === "ad_video" && !targetId) {
+      throw new HttpsError("invalid-argument", "Publicite a diffuser non precisee.");
+    }
+
+    // Le Pack Pro couvre la diffusion : laisser passer le paiement
+    // encaisserait 1000 F pour un service deja du.
+    if (product === "ad_video") {
+      const snap = await db.collection("advertisements").doc(targetId).get();
+      if (!snap.exists || snap.data().ownerId !== uid) {
+        throw new HttpsError("permission-denied", "Cette publicite ne vous appartient pas.");
+      }
+      const { isPro } = await readQuota(uid);
+      if (isPro) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Votre Pack Pro couvre deja la diffusion : aucun paiement n'est requis.",
+        );
+      }
     }
 
     // Verifie que l'annonce appartient bien au payeur.
@@ -432,6 +457,20 @@ async function grantProduct({ uid, product, targetId, reference }) {
       type: "proActivated",
       title: "Pack Pro active",
       body: `Votre Pack Pro est actif jusqu'au ${until.toLocaleDateString("fr-FR")}.`,
+    });
+  }
+
+  if (product === "ad_video" && targetId) {
+    await db.collection("advertisements").doc(targetId).update({
+      status: "active",
+      visibleUntil: admin.firestore.Timestamp.fromDate(until),
+      activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await notifyUser(uid, {
+      type: "adActivated",
+      title: "Publicite en ligne",
+      body: `Votre video est diffusee pendant ${config.durationDays} jours.`,
+      targetId,
     });
   }
 
@@ -1218,4 +1257,76 @@ exports.expireVisibleProperties = onSchedule("every 24 hours", async () => {
   })));
 
   console.log(`${snap.size} annonce(s) expiree(s).`);
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  PUBLICITES VIDEO
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Active une publicite sans paiement, au titre du Pack Pro.
+ *
+ * Cote client, un abonne Pro n'a aucun ecran de paiement a franchir. Cette
+ * activation ne peut donc pas etre laissee a l'application : elle verifierait
+ * elle-meme un statut qu'elle a tout interet a s'accorder.
+ */
+exports.activateAdvertisement = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const { adId } = request.data || {};
+  if (!adId) {
+    throw new HttpsError("invalid-argument", "Publicite non precisee.");
+  }
+
+  const ref = db.collection("advertisements").doc(adId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data().ownerId !== uid) {
+    throw new HttpsError("permission-denied", "Cette publicite ne vous appartient pas.");
+  }
+
+  const { isPro } = await readQuota(uid);
+  if (!isPro) {
+    throw new HttpsError(
+      "failed-precondition",
+      "La diffusion est payante hors Pack Pro.",
+    );
+  }
+
+  const until = new Date(
+    Date.now() + PRODUCTS.ad_video.durationDays * 24 * 60 * 60 * 1000);
+
+  await ref.update({
+    status: "active",
+    visibleUntil: admin.firestore.Timestamp.fromDate(until),
+    activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return {
+    success: true,
+    visibleUntil: until.toISOString(),
+    durationDays: PRODUCTS.ad_video.durationDays,
+  };
+});
+
+/**
+ * Retire les publicites dont les 3 jours sont ecoules.
+ *
+ * Meme raison que pour les annonces : sans balayage, `visibleUntil` ne serait
+ * qu'indicatif et la duree achetee n'aurait aucune portee.
+ */
+exports.expireAdvertisements = onSchedule("every 6 hours", async () => {
+  const maintenant = admin.firestore.Timestamp.now();
+
+  const snap = await db.collection("advertisements")
+    .where("status", "==", "active")
+    .where("visibleUntil", "<=", maintenant)
+    .limit(400)
+    .get();
+
+  if (snap.empty) return;
+
+  const batch = db.batch();
+  snap.docs.forEach((d) => batch.update(d.ref, { status: "expired" }));
+  await batch.commit();
+
+  console.log(`${snap.size} publicite(s) expiree(s).`);
 });

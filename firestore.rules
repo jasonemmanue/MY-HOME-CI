@@ -248,6 +248,46 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── advertisements (publicites video) ──────────────────────────────────
+    // Diffusion payante — 1000 F pour 3 jours — ou couverte par le Pack Pro.
+    match /advertisements/{adId} {
+
+      function isAdOwner() {
+        return isSignedIn()
+          && resource != null
+          && resource.data.ownerId == request.auth.uid;
+      }
+
+      // Seules les publicites en cours de diffusion sont publiques ; un
+      // brouillon ou une publicite expiree ne regarde que son auteur.
+      allow get: if resource == null
+        || resource.data.status == 'active'
+        || isAdOwner()
+        || isAdmin();
+
+      allow list: if (resource != null && resource.data.status == 'active')
+        || isAdOwner()
+        || isAdmin();
+
+      // Une publicite naît toujours inactive : `status` et `visibleUntil` sont
+      // poses par le serveur, apres paiement ou verification du Pack Pro.
+      // Les laisser au client reviendrait a offrir la diffusion.
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.status == 'draft'
+        && request.resource.data.visibleUntil == null;
+
+      allow update: if (
+          isAdOwner()
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.visibleUntil == resource.data.visibleUntil
+        )
+        || isAdmin();
+
+      allow delete: if isAdOwner() || isAdmin();
+    }
+
     // ── publicationQuotas (quota de publication) ───────────────────────────
     // Ecriture exclusivement serveur : un proprietaire capable de remettre
     // son compteur a zero publierait gratuitement sans fin. La lecture lui

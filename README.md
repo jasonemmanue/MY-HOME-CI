@@ -43,6 +43,11 @@ Deux fichiers non versionnes sont attendus avant de pouvoir lancer l'application
 `android/local.properties` (`MAPS_API_KEY=...`, sinon la carte reste grise) et,
 pour un build de production, `android/key.properties`. Voir [RELEASE.md](RELEASE.md).
 
+## Modele economique
+
+Quota de publication, fenetre de visibilite de 30 jours, publicites video et
+Pack Pro : voir [MONETISATION.md](MONETISATION.md).
+
 ## Publication
 
 La signature, la construction et le deploiement sur Google Play sont decrits
