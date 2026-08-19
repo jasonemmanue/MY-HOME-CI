@@ -32,6 +32,21 @@ class UserService {
         .map((s) => s.exists ? UserModel.fromFirestore(s) : null);
   }
 
+  /// Marque l'utilisateur comme vu a l'instant.
+  ///
+  /// `lastSeenAt` n'etait rafraichi qu'a la connexion, ce qui le rendait
+  /// inexploitable : un compte connecte la semaine derniere aurait paru
+  /// absent depuis. Les accuses de remise du chat s'appuient dessus pour
+  /// distinguer « envoye » de « remis ».
+  ///
+  /// Silencieux en cas d'echec : une presence non mise a jour ne doit jamais
+  /// interrompre ce que l'utilisateur est en train de faire.
+  Future<void> touchLastSeen(String uid) async {
+    try {
+      await _doc(uid).update({'lastSeenAt': FieldValue.serverTimestamp()});
+    } catch (_) {}
+  }
+
   /// Coordonnees privees du titulaire du compte.
   Future<UserContact> fetchContact(String uid) async {
     try {

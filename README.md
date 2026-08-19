@@ -8,7 +8,9 @@ MY HOME CI est une application mobile de mise en relation locative dediee au mar
 
 - Recherche de logements avec filtres avances (type, prix, quartier, pieces)
 - Carte interactive avec geolocalisation des biens
-- Chat integre proprietaire-locataire (sans echanger de numero)
+- Chat integre proprietaire-locataire (sans echanger de numero), avec
+  accuses de reception : une coche envoye, deux coches remis, deux
+  coches bleues lu
 - Favoris et alertes personnalisees
 - Informations sur les quartiers (commerces, ecoles, transports)
 - Verification des proprietaires (badge verifie)

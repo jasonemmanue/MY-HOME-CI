@@ -83,6 +83,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () =>
                   Navigator.pushNamed(context, AppRoutes.advertisement),
             ),
+            // Affiche l'etat courant plutot qu'une invitation generique : un
+            // abonne a qui l'on propose de souscrire doute de ce qu'il a paye.
+            _tile(
+              icon: Icons.workspace_premium_outlined,
+              title: auth.user!.isPro
+                  ? 'Mon Pack Pro'
+                  : 'Passer au Pack Pro',
+              subtitle: auth.user!.isPro
+                  ? 'Abonnement actif — voir le detail'
+                  : 'Annonces illimitees et publicites offertes, 15 000 FCFA / 30 j',
+              onTap: () => Navigator.pushNamed(context, AppRoutes.premium),
+            ),
             if (!auth.user!.isVerified)
               _tile(
                 icon: Icons.verified_outlined,

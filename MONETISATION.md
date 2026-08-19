@@ -55,6 +55,22 @@ Une publicite naît en `draft`. Son passage en `active` et sa date d'expiration
 sont poses par le serveur — jamais par le client, qui s'offrirait sinon la
 diffusion.
 
+### Souscrire
+
+L'ecran `lib/screens/profile/premium_screen.dart`, atteignable depuis le
+profil, presente les quatre avantages du pack et lance le paiement Mobile
+Money. Le libelle du bouton dans le profil suit l'etat du compte — « Mon Pack
+Pro » pour un abonne, « Passer au Pack Pro » sinon : proposer de souscrire a
+quelqu'un qui a deja paye le fait douter de ce qu'il a achete.
+
+L'abonnement n'est jamais accorde par le client. Il l'est au retour du
+webhook, apres verification aupres de l'operateur — l'accorder des
+l'initiation permettrait de l'obtenir en abandonnant le paiement.
+
+Le pack ne se reconduit pas : a l'echeance, le compte revient au
+fonctionnement gratuit sans qu'il y ait rien a resilier. C'est dit sur l'ecran
+de souscription, pour eviter le reproche d'un prelevement inattendu.
+
 ## 3. Autres produits
 
 | Produit | Montant | Duree |

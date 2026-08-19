@@ -11,6 +11,7 @@ import 'providers/property_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/advertisement/advertisement_screen.dart';
+import 'screens/profile/premium_screen.dart';
 import 'screens/auth/complete_profile_screen.dart';
 import 'screens/auth/otp_screen.dart';
 import 'screens/chat/chat_detail_screen.dart';
@@ -32,6 +33,7 @@ import 'screens/publish_property/publish_property_screen.dart';
 import 'screens/splash/splash_screen.dart';
 import 'services/analytics_service.dart';
 import 'services/notification_service.dart';
+import 'services/user_service.dart';
 
 class MyHomeCIApp extends StatefulWidget {
   final SettingsProvider settings;
@@ -42,7 +44,8 @@ class MyHomeCIApp extends StatefulWidget {
   State<MyHomeCIApp> createState() => _MyHomeCIAppState();
 }
 
-class _MyHomeCIAppState extends State<MyHomeCIApp> {
+class _MyHomeCIAppState extends State<MyHomeCIApp>
+    with WidgetsBindingObserver {
   /// Clef de navigation globale : les notifications arrivent hors de tout
   /// `BuildContext` et doivent pouvoir pousser un ecran malgre tout.
   static final GlobalKey<NavigatorState> navigatorKey =
@@ -65,6 +68,24 @@ class _MyHomeCIAppState extends State<MyHomeCIApp> {
 
     NotificationService.instance.initialize();
     NotificationService.instance.onOpenTarget = _handleNotificationTap;
+
+    // Presence : le retour au premier plan rafraichit `lastSeenAt`, dont
+    // dependent les accuses de remise du chat.
+    WidgetsBinding.instance.addObserver(this);
+    _touchPresence();
+    _auth.addListener(_touchPresence);
+  }
+
+  void _touchPresence() {
+    final uid = _auth.uid;
+    // `ignore()` plutot que `unawaited` : ce dernier est exporte par
+    // plusieurs bibliotheques importees ici, et l'appel devient ambigu.
+    if (uid != null) UserService.instance.touchLastSeen(uid).ignore();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _touchPresence();
   }
 
   void _syncFavorites() {
@@ -94,6 +115,8 @@ class _MyHomeCIAppState extends State<MyHomeCIApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _auth.removeListener(_touchPresence);
     _auth.removeListener(_syncFavorites);
     _auth.dispose();
     _favorites.dispose();
@@ -167,6 +190,9 @@ class _MyHomeCIAppState extends State<MyHomeCIApp> {
         break;
       case AppRoutes.advertisement:
         page = const AdvertisementScreen();
+        break;
+      case AppRoutes.premium:
+        page = const PremiumScreen();
         break;
       case AppRoutes.home:
         page = HomeScreen(

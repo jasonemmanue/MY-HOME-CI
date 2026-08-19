@@ -11,9 +11,11 @@ import '../../config/routes.dart';
 import '../../config/theme.dart';
 import '../../models/conversation.dart';
 import '../../models/message.dart';
+import '../../models/user_model.dart';
 import '../../models/report.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/chat_service.dart';
+import '../../services/user_service.dart';
 import '../../services/report_service.dart';
 import '../../services/storage_service.dart';
 import '../property_detail/property_detail_screen.dart';
@@ -49,6 +51,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   String get _conversationId => widget.args.conversationId;
 
+  /// Derniere presence connue de l'autre participant.
+  ///
+  /// Sert a distinguer « envoye » de « remis » : un message ecrit dans
+  /// Firestore n'est pas pour autant parvenu sur l'ecran d'en face.
+  DateTime? _autreVuLe;
+  String? _autreId;
+  StreamSubscription<UserModel?>? _presenceSub;
+
   @override
   void initState() {
     super.initState();
@@ -56,8 +66,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _markRead());
   }
 
+  /// Suit la presence de l'interlocuteur. Idempotent : appele a chaque
+  /// reconstruction, il ne reabonne que si l'interlocuteur a change.
+  void _suivrePresence(String? autreId) {
+    if (autreId == null || autreId.isEmpty || autreId == _autreId) return;
+    _autreId = autreId;
+    _presenceSub?.cancel();
+    _presenceSub = UserService.instance.watch(autreId).listen((u) {
+      if (mounted) setState(() => _autreVuLe = u?.lastSeenAt);
+    });
+  }
+
   @override
   void dispose() {
+    _presenceSub?.cancel();
     _typingTimer?.cancel();
     _clearTyping();
     _controller.dispose();
@@ -216,6 +238,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       initialData: widget.args.conversation,
       builder: (context, snapshot) {
         final conversation = snapshot.data;
+        _suivrePresence(conversation?.otherUserId(uid));
 
         return Scaffold(
           appBar: AppBar(
@@ -517,15 +540,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   ),
                   if (isMine) ...[
                     const SizedBox(width: 4),
-                    Icon(
-                      message.isPending
-                          ? Icons.schedule
-                          : (message.isRead ? Icons.done_all : Icons.done),
-                      size: 13,
-                      color: message.isRead
-                          ? const Color(0xFF9BE7C4)
-                          : Colors.white.withValues(alpha: 0.75),
-                    ),
+                    _accuse(message),
                   ],
                 ],
               ),
@@ -533,6 +548,37 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Accuse de reception, en trois etats.
+  ///
+  ///  * une coche pale  — le message est parti,
+  ///  * deux coches pales — l'autre s'est connecte depuis l'envoi,
+  ///  * deux coches bleues — il l'a lu.
+  ///
+  /// La distinction repose sur `lastSeenAt`, rafraichi a chaque retour de
+  /// l'application au premier plan. Elle reste une approximation : elle dit
+  /// que l'interlocuteur etait la apres l'envoi, pas qu'il a ouvert le fil.
+  Widget _accuse(Message message) {
+    if (message.isPending) {
+      return Icon(Icons.schedule,
+          size: 13, color: Colors.white.withValues(alpha: 0.75));
+    }
+
+    if (message.isRead) {
+      // Bleu clair et non blanc : sur la bulle verte, un bleu soutenu
+      // deviendrait illisible.
+      return const Icon(Icons.done_all, size: 13, color: Color(0xFF53BDEB));
+    }
+
+    final remis =
+        _autreVuLe != null && _autreVuLe!.isAfter(message.timestamp);
+
+    return Icon(
+      remis ? Icons.done_all : Icons.done,
+      size: 13,
+      color: Colors.white.withValues(alpha: 0.75),
     );
   }
 

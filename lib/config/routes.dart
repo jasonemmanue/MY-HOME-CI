@@ -20,6 +20,7 @@ class AppRoutes {
   static const String ownerDashboard = '/owner-dashboard';
   static const String publish = '/publish';
   static const String advertisement = '/advertisement';
+  static const String premium = '/profile/premium';
   static const String favorites = '/favorites';
   static const String profile = '/profile';
   static const String editProfile = '/profile/edit';
