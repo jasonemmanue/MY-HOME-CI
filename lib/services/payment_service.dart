@@ -12,9 +12,24 @@ import 'package:flutter/foundation.dart';
 /// lancement.
 enum PaidProduct {
   pro,
-  boost;
+  boost,
+  adVideo,
+  publication;
 
-  String get code => name;
+  /// Code attendu par les Cloud Functions.
+  ///
+  /// Ne peut pas se deduire de `name` : Dart impose le lowerCamelCase aux
+  /// valeurs d'enumeration, tandis que `PRODUCTS` cote serveur emploie le
+  /// snake_case. Un `name` renvoye tel quel donnerait « adVideo » et le
+  /// paiement serait refuse avec « Service inconnu ».
+  String get code {
+    switch (this) {
+      case PaidProduct.adVideo:
+        return 'ad_video';
+      default:
+        return name;
+    }
+  }
 
   String get label {
     switch (this) {
@@ -22,6 +37,10 @@ enum PaidProduct {
         return 'Pack Pro Proprietaire';
       case PaidProduct.boost:
         return 'Mise en avant';
+      case PaidProduct.adVideo:
+        return 'Publicite video';
+      case PaidProduct.publication:
+        return "Publication d'annonce";
     }
   }
 
@@ -32,20 +51,38 @@ enum PaidProduct {
             'pendant 30 jours.';
       case PaidProduct.boost:
         return 'Votre annonce apparait en tete des resultats pendant 7 jours.';
+      case PaidProduct.adVideo:
+        return "Votre video est diffusee dans l'application pendant 3 jours.";
+      case PaidProduct.publication:
+        return "Publication ou remise en ligne d'une annonce, visible "
+            "30 jours.";
     }
   }
 }
 
 /// Operateurs Mobile Money acceptes par GeniusPay en Cote d'Ivoire.
 enum MobileMoneyOperator {
-  wave('wave', 'Wave'),
-  orange('orange_money', 'Orange Money'),
-  mtn('mtn_money', 'MTN Money'),
-  moov('moov_money', 'Moov Money');
+  wave('wave', 'Wave', 0xFF1DC8FF),
+  orange('orange_money', 'Orange Money', 0xFFFF7900),
+  mtn('mtn_money', 'MTN Money', 0xFFFFCB05),
+  moov('moov_money', 'Moov Money', 0xFF0057B8);
 
   final String code;
   final String label;
-  const MobileMoneyOperator(this.code, this.label);
+
+  /// Couleur de marque, utilisee tant que le logo officiel n'est pas fourni.
+  final int brandColor;
+
+  const MobileMoneyOperator(this.code, this.label, this.brandColor);
+
+  /// Logo officiel attendu dans `assets/images/operators/`.
+  ///
+  /// Ces logos sont des marques deposees : ils ne peuvent etre ni dessines de
+  /// memoire, ni repris d'une source approximative — un logo faux sur un
+  /// ecran de paiement est pire que pas de logo du tout. Le selecteur affiche
+  /// un repli aux couleurs de la marque tant que le fichier est absent, et
+  /// bascule seul des qu'il est depose.
+  String get logoAsset => 'assets/images/operators/$code.png';
 }
 
 /// Etat d'une transaction, tel qu'ecrit par les Cloud Functions.

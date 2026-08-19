@@ -1020,13 +1020,33 @@ exports.deleteAccount = onCall(async (request) => {
     });
   }
 
-  // 3. Sous-collections du profil.
+  // 3. Publicites video et leurs fichiers.
+  const ads = await db
+    .collection("advertisements").where("ownerId", "==", uid).get();
+
+  for (const doc of ads.docs) {
+    try {
+      await bucket.deleteFiles({ prefix: `advertisements/${uid}/${doc.id}/` });
+    } catch (e) {
+      console.warn(`Video de ${doc.id} non supprimee :`, e.message);
+    }
+    await doc.ref.delete();
+  }
+
+  // 4. Quota de publication.
+  await db.collection("publicationQuotas").doc(uid).delete().catch(() => {});
+
+  // Les transactions sont volontairement CONSERVEES : ce sont des ecritures
+  // comptables, et les effacer priverait la plateforme de la trace des sommes
+  // encaissees. Elles ne portent qu'un identifiant, aucune donnee nominative.
+
+  // 5. Sous-collections du profil.
   for (const sub of ["favorites", "alerts", "notifications", "tokens", "private"]) {
     const snap = await db.collection("users").doc(uid).collection(sub).get();
     await Promise.all(snap.docs.map((d) => d.ref.delete()));
   }
 
-  // 4. Avatar, demande de verification, profil.
+  // 6. Avatar, demande de verification, profil.
   try {
     await bucket.deleteFiles({ prefix: `avatars/${uid}/` });
     await bucket.deleteFiles({ prefix: `verifications/${uid}/` });
@@ -1036,7 +1056,7 @@ exports.deleteAccount = onCall(async (request) => {
   await db.collection("verificationRequests").doc(uid).delete().catch(() => {});
   await db.collection("users").doc(uid).delete();
 
-  // 5. Compte d'authentification, en dernier.
+  // 7. Compte d'authentification, en dernier.
   await admin.auth().deleteUser(uid);
 
   console.log(`Compte ${uid} supprime.`);

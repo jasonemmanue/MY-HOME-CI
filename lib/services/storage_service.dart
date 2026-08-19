@@ -172,6 +172,32 @@ class StorageService {
     return ref.getDownloadURL();
   }
 
+  /// Video d'une publicite : `advertisements/{ownerId}/{adId}/video.mp4`.
+  ///
+  /// Le chemin porte l'identifiant de la publicite pour que la suppression du
+  /// compte puisse balayer tout le prefixe d'un seul appel, sans avoir a
+  /// relire chaque document.
+  Future<String> uploadAdvertisementVideo({
+    required String ownerId,
+    required String adId,
+    required File file,
+    void Function(double progress)? onProgress,
+  }) async {
+    final ref = _storage.ref('advertisements/$ownerId/$adId/video.mp4');
+    final task = ref.putFile(file, SettableMetadata(contentType: 'video/mp4'));
+
+    if (onProgress != null) {
+      task.snapshotEvents.listen((s) {
+        if (s.totalBytes > 0) {
+          onProgress(s.bytesTransferred / s.totalBytes);
+        }
+      });
+    }
+
+    await task;
+    return ref.getDownloadURL();
+  }
+
   // ── Suppression ─────────────────────────────────────────────────────────
 
   /// Supprime un fichier a partir de son URL de telechargement.

@@ -115,15 +115,33 @@ service cloud.firestore {
         || isPropertyOwner()
         || isAdmin();
 
+      // Un brouillon est par definition incomplet : le formulaire l'enregistre
+      // des la premiere etape franchie, bien avant que le titre ou le loyer
+      // soient saisis. Exiger un contenu complet des la creation refusait donc
+      // toutes ces sauvegardes — silencieusement, puisque le brouillon est un
+      // filet de securite dont l'echec n'interrompt pas la saisie.
+      //
+      // Le contenu n'est verifie qu'au passage en moderation, seul moment ou
+      // l'annonce devient publique.
+      function contenuComplet(data) {
+        return data.price is int
+          && data.price > 0
+          && data.title is string
+          && data.title.size() >= 5;
+      }
+
       allow create: if isSignedIn()
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.status in ['draft', 'pending']
-        && request.resource.data.price is int
-        && request.resource.data.price > 0
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 5
+        && (request.resource.data.status == 'draft'
+            || contenuComplet(request.resource.data))
         && request.resource.data.boostedUntil == null
-        && request.resource.data.visibleUntil == null;
+        // Tolere l'absence du champ : dans les regles, lire une clef
+        // inexistante fait echouer toute l'expression, et un client d'une
+        // version anterieure — celui deja installe sur un telephone — se
+        // verrait refuser la creation sans aucun message exploitable.
+        && (!('visibleUntil' in request.resource.data)
+            || request.resource.data.visibleUntil == null);
 
       allow update: if
         // Cas 1 — le proprietaire modifie son annonce, sans pouvoir la
@@ -132,12 +150,19 @@ service cloud.firestore {
           isPropertyOwner()
           && request.resource.data.ownerId == resource.data.ownerId
           && request.resource.data.status in ['draft', 'pending', 'rented', 'archived']
+          // Une annonce ne part en moderation qu'une fois renseignee.
+          && (request.resource.data.status != 'pending'
+              || contenuComplet(request.resource.data))
           && request.resource.data.boostedUntil == resource.data.boostedUntil
           && request.resource.data.views == resource.data.views
           // `visibleUntil` est pose par la Cloud Function apres decompte du
           // quota. Laisser le client l'ecrire reviendrait a lui laisser
           // prolonger sa visibilite, et donc a rendre le quota decoratif.
-          && request.resource.data.visibleUntil == resource.data.visibleUntil
+          // Meme tolerance qu'a la creation, pour la meme raison.
+          && (!('visibleUntil' in request.resource.data)
+              || request.resource.data.visibleUntil ==
+                 (('visibleUntil' in resource.data)
+                   ? resource.data.visibleUntil : null))
         )
         // Cas 2 — n'importe qui (visiteur inclus) incremente le compteur de
         // vues ou de favoris, et rien d'autre.

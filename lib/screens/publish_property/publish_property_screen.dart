@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -331,8 +333,23 @@ class _PublishPropertyScreenState extends State<PublishPropertyScreen> {
       );
 
       if (mounted) Navigator.pop(context, true);
-    } catch (_) {
-      _snack('Publication impossible. Verifiez votre connexion et reessayez.');
+    } on FirebaseException catch (e) {
+      // Un refus des regles n'a rien d'un probleme de reseau : le dire
+      // envoyait chercher du cote de la connexion pendant que la cause etait
+      // ailleurs. Le code technique est journalise pour le diagnostic, jamais
+      // montre a l'utilisateur.
+      debugPrint('Publication refusee : ${e.plugin}/${e.code} — ${e.message}');
+      _snack(switch (e.code) {
+        'permission-denied' =>
+          'Publication refusee. Verifiez que le loyer et le titre sont '
+              'renseignes, puis reessayez.',
+        'unavailable' || 'deadline-exceeded' =>
+          'Serveur injoignable. Verifiez votre connexion et reessayez.',
+        _ => 'Publication impossible. Reessayez dans un instant.',
+      });
+    } catch (e) {
+      debugPrint('Publication impossible : $e');
+      _snack('Publication impossible. Reessayez dans un instant.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -55,6 +55,19 @@ service firebase.storage {
         && request.resource.size < 10 * 1024 * 1024;
     }
 
+    // Video de publicite : advertisements/{ownerId}/{adId}/{fichier}
+    //
+    // Lecture publique : la video est diffusee dans l'application. C'est le
+    // document Firestore qui decide si elle l'est encore, pas le fichier.
+    // 50 Mo : une video de 30 secondes filmee au telephone depasse largement
+    // les 10 Mo tolerees pour un document d'identite.
+    match /advertisements/{ownerId}/{adId}/{fileName} {
+      allow read: if true;
+      allow write: if (isSignedIn() && request.auth.uid == ownerId
+                       && request.resource.size < 50 * 1024 * 1024)
+        || isAdmin();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

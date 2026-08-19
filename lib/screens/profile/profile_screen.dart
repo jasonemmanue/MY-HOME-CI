@@ -76,6 +76,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               title: 'Publier une annonce',
               onTap: () => Navigator.pushNamed(context, AppRoutes.publish),
             ),
+            _tile(
+              icon: Icons.play_circle_outline,
+              title: 'Faire une publicite video',
+              subtitle: '1 000 FCFA pour 3 jours — offerte avec le Pack Pro',
+              onTap: () =>
+                  Navigator.pushNamed(context, AppRoutes.advertisement),
+            ),
             if (!auth.user!.isVerified)
               _tile(
                 icon: Icons.verified_outlined,
