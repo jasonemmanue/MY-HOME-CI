@@ -48,6 +48,11 @@ async function main() {
   const email = process.argv[2];
   const password = process.argv[3];
 
+  // Aide au diagnostic : le compte est cree dans CE projet. Il doit
+  // correspondre a NEXT_PUBLIC_FIREBASE_PROJECT_ID cote admin, sinon la
+  // connexion echouera avec « email ou mot de passe incorrect ».
+  console.log("Projet Firebase vise :", serviceAccount.project_id);
+
   if (!email) {
     console.error("Usage : node make-admin.js <email> [motDePasse]");
     process.exit(1);
@@ -57,6 +62,13 @@ async function main() {
   try {
     user = await admin.auth().getUserByEmail(email);
     console.log("Compte existant :", user.uid);
+    // Idempotent : si un mot de passe est fourni, on le (re)definit. Ainsi,
+    // relancer le script garantit que le mot de passe correspond, meme si le
+    // compte existait deja avec un mot de passe inconnu.
+    if (password) {
+      await admin.auth().updateUser(user.uid, { password });
+      console.log("Mot de passe reinitialise.");
+    }
   } catch (e) {
     if (e.code !== "auth/user-not-found") throw e;
     if (!password) {
