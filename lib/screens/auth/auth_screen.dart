@@ -11,7 +11,6 @@ import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
 import '../../utils/phone.dart';
 import '../legal/legal_screen.dart';
-import 'otp_screen.dart';
 
 class AuthScreenArgs {
   final int initialTab;
@@ -20,10 +19,15 @@ class AuthScreenArgs {
 
 /// Point d'entrée de l'application.
 ///
-/// Trois voies coexistent volontairement : le mode visiteur (mis en avant,
-/// comme l'impose le cahier des charges), l'email/mot de passe, et le
-/// téléphone par OTP. S'y ajoutent Google et — sur iOS uniquement et
-/// obligatoirement — Sign in with Apple.
+/// Deux voies coexistent volontairement : le mode visiteur (mis en avant,
+/// comme l'impose le cahier des charges) et l'email/mot de passe. S'y
+/// ajoutent Google et — sur iOS uniquement et obligatoirement — Sign in
+/// with Apple.
+///
+/// La connexion par SMS a été retirée de cet écran. `OtpScreen`, sa route et
+/// les méthodes OTP d'`AuthService` restent en place : le parcours est
+/// complet et testé, seul son point d'entrée a disparu. Le rétablir revient à
+/// remettre un bouton ici.
 class AuthScreen extends StatefulWidget {
   final int initialTab;
 
@@ -202,18 +206,6 @@ class _AuthScreenState extends State<AuthScreen>
       return;
     }
     _goHome();
-  }
-
-  void _startPhoneLogin() {
-    Navigator.pushNamed(
-      context,
-      AppRoutes.otp,
-      arguments: OtpArgs(
-        phone: _currentTab == 1 ? _registerPhone.text : '',
-        name: _currentTab == 1 ? _registerName.text : null,
-        role: _currentTab == 1 ? _selectedRole : null,
-      ),
-    );
   }
 
   Future<void> _forgotPassword() async {
@@ -506,17 +498,6 @@ class _AuthScreenState extends State<AuthScreen>
           ),
           const SizedBox(height: 4),
           _primaryButton('Se connecter', _submitLogin),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _busy ? null : _startPhoneLogin,
-            icon: const Icon(Icons.sms_outlined, size: 20),
-            label: Text(
-              'Connexion par SMS',
-              style: GoogleFonts.inter(
-                  fontSize: 15, fontWeight: FontWeight.w500),
-            ),
-            style: _outlinedStyle(isDark),
-          ),
         ],
       ),
     );
