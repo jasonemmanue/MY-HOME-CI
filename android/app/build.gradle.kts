@@ -25,6 +25,16 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// Gradle ne charge automatiquement que gradle.properties : local.properties
+// est lu a la main (par le plugin Android pour sdk.dir, par Flutter pour
+// flutter.sdk). Sans cette lecture explicite, findProperty("MAPS_API_KEY")
+// renvoie null et la carte se lance avec une clef vide — l'echec se voit
+// seulement a l'execution, sous forme d'« Authorization failure ».
+val localProperties = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) load(f.readText(Charsets.UTF_8).removePrefix("﻿").reader())
+}
+
 android {
     namespace = "com.myhomeci.app"
     compileSdk = flutter.compileSdkVersion
@@ -55,10 +65,19 @@ android {
         // Clef Google Maps injectee au build : elle ne doit pas etre en dur
         // dans le manifeste versionne.
         // Definir MAPS_API_KEY dans android/local.properties ou l'environnement.
-        manifestPlaceholders["MAPS_API_KEY"] =
+        val mapsApiKey =
             (project.findProperty("MAPS_API_KEY") as String?)
+                ?: localProperties.getProperty("MAPS_API_KEY")
                 ?: System.getenv("MAPS_API_KEY")
                 ?: ""
+        if (mapsApiKey.isBlank()) {
+            logger.warn(
+                "\n⚠️  MAPS_API_KEY absente — la carte restera grise " +
+                "(« Authorization failure » dans logcat).\n" +
+                "   Ajoutez MAPS_API_KEY=... dans android/local.properties.\n"
+            )
+        }
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     signingConfigs {

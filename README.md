@@ -39,6 +39,15 @@ flutter pub get
 flutter run
 ```
 
+Deux fichiers non versionnes sont attendus avant de pouvoir lancer l'application :
+`android/local.properties` (`MAPS_API_KEY=...`, sinon la carte reste grise) et,
+pour un build de production, `android/key.properties`. Voir [RELEASE.md](RELEASE.md).
+
+## Publication
+
+La signature, la construction et le deploiement sur Google Play sont decrits
+dans [RELEASE.md](RELEASE.md).
+
 ## Phase actuelle
 
 **Phase 1 — Maquettes UI** : Interfaces uniquement, donnees mock, aucune logique backend. En attente de validation client.
