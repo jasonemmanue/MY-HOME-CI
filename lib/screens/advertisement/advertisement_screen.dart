@@ -10,6 +10,7 @@ import '../../config/constants.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/advertisement_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/payment_service.dart';
 import '../../services/publication_quota_service.dart';
 import '../../utils/phone.dart';
@@ -33,6 +34,12 @@ class _AdvertisementScreenState extends State<AdvertisementScreen> {
 
   final _titre = TextEditingController();
   final _telephone = TextEditingController();
+  final _email = TextEditingController();
+
+  /// Sur iOS, la regle App Store 3.1.1 interdit de faire payer un service
+  /// numerique hors achat integre : ni prix ni operateur ne doivent
+  /// apparaitre. Le serveur envoie alors un lien, et tout se joue dans le
+  /// navigateur.
 
   File? _video;
   MobileMoneyOperator? _operateur;
@@ -46,12 +53,16 @@ class _AdvertisementScreenState extends State<AdvertisementScreen> {
   void initState() {
     super.initState();
     _chargerQuota();
+    _email.text = AuthService.instance.currentUser?.email ?? '';
   }
+
+  bool get _paiementIntegre => PaymentService.instance.isInAppPaymentAllowed;
 
   @override
   void dispose() {
     _titre.dispose();
     _telephone.dispose();
+    _email.dispose();
     super.dispose();
   }
 
@@ -86,6 +97,13 @@ class _AdvertisementScreenState extends State<AdvertisementScreen> {
     }
     if (_video == null) return 'Choisissez une video.';
     if (!_estPro) {
+      if (!_paiementIntegre) {
+        final email = _email.text.trim();
+        if (email.isEmpty || !email.contains('@')) {
+          return 'Indiquez une adresse email valide.';
+        }
+        return null;
+      }
       if (_operateur == null) return 'Choisissez un moyen de paiement.';
       if (!isPlausiblePhone(_telephone.text)) {
         return 'Indiquez le numero a debiter.';
@@ -129,6 +147,23 @@ class _AdvertisementScreenState extends State<AdvertisementScreen> {
         await AdvertisementService.instance.activateAsPro(adId);
         if (!mounted) return;
         _succes('Votre publicite est en ligne pour $_jours jours.');
+        return;
+      }
+
+      if (!_paiementIntegre) {
+        setState(() => _etape = 'Envoi du lien…');
+        final parEmail =
+            await PaymentService.instance.requestActivationByEmail(
+          product: PaidProduct.adVideo,
+          email: _email.text.trim(),
+          targetId: adId,
+        );
+        if (!mounted) return;
+        if (!parEmail.success) {
+          _erreur(parEmail.message);
+          return;
+        }
+        _succes(parEmail.message);
         return;
       }
 
@@ -234,7 +269,36 @@ class _AdvertisementScreenState extends State<AdvertisementScreen> {
             const SizedBox(height: 8),
             _choixVideo(isDark),
 
-            if (!_estPro) ...[
+            if (!_estPro && !_paiementIntegre) ...[
+              const SizedBox(height: 24),
+              Text('Activation',
+                  style: GoogleFonts.poppins(
+                      fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Text(
+                "Nous vous envoyons un lien securise par email. La diffusion "
+                "demarre des la confirmation.",
+                style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  height: 1.45,
+                  color: isDark
+                      ? AppTheme.textSecondaryDark
+                      : AppTheme.textSecondaryLight,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _email,
+                keyboardType: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.email],
+                decoration: const InputDecoration(
+                  labelText: 'Adresse email',
+                  prefixIcon: Icon(Icons.email_outlined, size: 20),
+                ),
+              ),
+            ],
+
+            if (!_estPro && _paiementIntegre) ...[
               const SizedBox(height: 24),
               Text('Moyen de paiement',
                   style: GoogleFonts.poppins(
@@ -276,7 +340,9 @@ class _AdvertisementScreenState extends State<AdvertisementScreen> {
               onPressed: _busy ? null : _envoyer,
               child: Text(_estPro
                   ? 'Diffuser ma publicite'
-                  : 'Payer ${AppConstants.formatPrice(_prix)} et diffuser'),
+                  : (_paiementIntegre
+                      ? 'Payer ${AppConstants.formatPrice(_prix)} et diffuser'
+                      : 'Recevoir le lien d’activation')),
             ),
             const SizedBox(height: 24),
           ],
@@ -313,7 +379,9 @@ class _AdvertisementScreenState extends State<AdvertisementScreen> {
                 Text(
                   pro
                       ? 'Incluse dans votre Pack Pro'
-                      : '${AppConstants.formatPrice(_prix)} pour $_jours jours',
+                      : (_paiementIntegre
+                          ? '${AppConstants.formatPrice(_prix)} pour $_jours jours'
+                          : 'Diffusion de $_jours jours'),
                   style: GoogleFonts.poppins(
                       fontSize: 14.5, fontWeight: FontWeight.w600),
                 ),
@@ -324,7 +392,8 @@ class _AdvertisementScreenState extends State<AdvertisementScreen> {
                           'l\'application, sans frais.'
                       : 'Votre video est diffusee $_jours jours dans '
                           'l\'application, aupres des personnes qui cherchent '
-                          'un logement. Le Pack Pro la rend gratuite.',
+                          'un logement. '
+                          '${_paiementIntegre ? "Le Pack Pro la rend gratuite." : "L’activation se termine dans votre navigateur."}',
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
                     height: 1.45,

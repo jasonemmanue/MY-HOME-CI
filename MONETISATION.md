@@ -86,6 +86,32 @@ catalogue, et son montant n'est jamais recu du client.
 
 ---
 
+## Le cas iOS
+
+La regle App Store 3.1.1 interdit de faire payer un service numerique hors
+achat integre. Elle interdit aussi d'**annoncer un tarif** dans l'application
+pour un paiement qui se fera ailleurs.
+
+`PaymentService.isInAppPaymentAllowed` vaut donc `false` sur iOS, et la garde
+est dans le service, pas seulement dans l'interface : un futur ecran ne peut
+pas contourner la regle par inadvertance.
+
+Consequences a respecter dans tout nouvel ecran tarifaire :
+
+| Element | Android / Web | iOS |
+|---|---|---|
+| Montant affiche | oui | **jamais** |
+| Selecteur d'operateur | oui | **jamais** |
+| Parcours | Mobile Money dans l'application | lien envoye par email, paiement dans le navigateur |
+| Fonction appelee | `initiateMobileMoneyPayment` | `requestActivationByEmail` |
+
+Cela vaut aussi pour les **libelles secondaires**. Les tuiles du profil
+annoncaient « 1 000 FCFA pour 3 jours » et « 15 000 FCFA / 30 j » : ces
+mentions sont masquees sur iOS, ou elles auraient suffi a motiver un rejet.
+
+La page de paiement web (`/pay/[token]` du back-office) reste le seul endroit
+ou un utilisateur iOS voit un montant.
+
 ## Ou vit chaque regle
 
 | Element | Emplacement | Pourquoi la |

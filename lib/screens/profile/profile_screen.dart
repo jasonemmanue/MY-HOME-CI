@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/routes.dart';
+import '../../services/payment_service.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
@@ -76,10 +77,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               title: 'Publier une annonce',
               onTap: () => Navigator.pushNamed(context, AppRoutes.publish),
             ),
+            // Les montants ne s'affichent pas sur iOS : la regle App Store
+            // 3.1.1 interdit d'y annoncer un tarif pour un service numerique
+            // paye hors achat integre. Le parcours iOS passe par un lien
+            // envoye par email, et le prix n'apparait que sur la page web.
             _tile(
               icon: Icons.play_circle_outline,
               title: 'Faire une publicite video',
-              subtitle: '1 000 FCFA pour 3 jours — offerte avec le Pack Pro',
+              subtitle: PaymentService.instance.isInAppPaymentAllowed
+                  ? '1 000 FCFA pour 3 jours — offerte avec le Pack Pro'
+                  : 'Diffusion de 3 jours — offerte avec le Pack Pro',
               onTap: () =>
                   Navigator.pushNamed(context, AppRoutes.advertisement),
             ),
@@ -92,7 +99,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   : 'Passer au Pack Pro',
               subtitle: auth.user!.isPro
                   ? 'Abonnement actif — voir le detail'
-                  : 'Annonces illimitees et publicites offertes, 15 000 FCFA / 30 j',
+                  : (PaymentService.instance.isInAppPaymentAllowed
+                      ? 'Annonces illimitees et publicites offertes, '
+                          '15 000 FCFA / 30 j'
+                      : 'Annonces illimitees et publicites offertes'),
               onTap: () => Navigator.pushNamed(context, AppRoutes.premium),
             ),
             if (!auth.user!.isVerified)

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/constants.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/auth_service.dart';
 import '../../services/payment_service.dart';
 import '../../utils/phone.dart';
 import '../../widgets/operator_selector.dart';
@@ -28,13 +29,48 @@ class _PremiumScreenState extends State<PremiumScreen> {
   static const int _jours = 30;
 
   final _telephone = TextEditingController();
+  final _email = TextEditingController();
   MobileMoneyOperator? _operateur;
   bool _busy = false;
+
+  /// Sur iOS, la regle App Store 3.1.1 interdit de faire payer un service
+  /// numerique hors achat integre. Ni prix ni moyen de paiement ne doivent
+  /// donc apparaitre : l'application se contente d'envoyer un lien, et tout
+  /// se joue ensuite dans le navigateur.
+  bool get _paiementIntegre => PaymentService.instance.isInAppPaymentAllowed;
+
+  @override
+  void initState() {
+    super.initState();
+    _email.text = AuthService.instance.currentUser?.email ?? '';
+  }
 
   @override
   void dispose() {
     _telephone.dispose();
+    _email.dispose();
     super.dispose();
+  }
+
+  /// Parcours iOS : le serveur envoie un lien de paiement par email.
+  Future<void> _demanderParEmail() async {
+    final email = _email.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      _message('Indiquez une adresse email valide.', erreur: true);
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final resultat = await PaymentService.instance.requestActivationByEmail(
+        product: PaidProduct.pro,
+        email: email,
+      );
+      _message(resultat.message, erreur: !resultat.success);
+      if (resultat.success && mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _souscrire() async {
@@ -142,7 +178,12 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 'Vues, favoris et contacts recus, annonce par annonce.',
                 isDark),
 
-            if (!actif) ...[
+            if (!actif && !_paiementIntegre) ...[
+              const SizedBox(height: 26),
+              _blocEmail(isDark),
+            ],
+
+            if (!actif && _paiementIntegre) ...[
               const SizedBox(height: 26),
               Text('Moyen de paiement',
                   style: GoogleFonts.poppins(
@@ -195,6 +236,49 @@ class _PremiumScreenState extends State<PremiumScreen> {
     );
   }
 
+  /// Bloc iOS : aucun montant, aucun operateur — seulement l'envoi du lien.
+  Widget _blocEmail(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Activation',
+            style: GoogleFonts.poppins(
+                fontSize: 14, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Text(
+          "Nous vous envoyons un lien securise par email. L'activation se "
+          'termine dans votre navigateur, en quelques secondes.',
+          style: GoogleFonts.inter(
+            fontSize: 12.5,
+            height: 1.45,
+            color: isDark
+                ? AppTheme.textSecondaryDark
+                : AppTheme.textSecondaryLight,
+          ),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _email,
+          keyboardType: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.email],
+          decoration: const InputDecoration(
+            labelText: 'Adresse email',
+            prefixIcon: Icon(Icons.email_outlined, size: 20),
+          ),
+        ),
+        const SizedBox(height: 20),
+        if (_busy) ...[
+          const LinearProgressIndicator(),
+          const SizedBox(height: 16),
+        ],
+        FilledButton(
+          onPressed: _busy ? null : _demanderParEmail,
+          child: const Text("Recevoir le lien d'activation"),
+        ),
+      ],
+    );
+  }
+
   Widget _enTete(bool actif, DateTime? jusquA, bool isDark) {
     final couleur = actif ? AppTheme.primaryGreen : AppTheme.secondaryOrange;
 
@@ -232,7 +316,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     ? 'Votre abonnement est actif.'
                     : 'Actif jusqu\'au '
                         '${DateFormat('d MMMM yyyy', 'fr_FR').format(jusquA)}.')
-                : '${AppConstants.formatPrice(_prix)} pour $_jours jours.',
+                : (_paiementIntegre
+                    ? '${AppConstants.formatPrice(_prix)} pour $_jours jours.'
+                    : 'Abonnement de $_jours jours.'),
             style: GoogleFonts.inter(
               fontSize: 13.5,
               height: 1.45,

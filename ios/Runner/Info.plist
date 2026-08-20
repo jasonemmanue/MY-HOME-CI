@@ -57,7 +57,7 @@
 	<string>My Home CI utilise l'appareil photo pour vous permettre de photographier votre logement lors de la publication d'une annonce.</string>
 
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>My Home CI accede a vos photos pour illustrer vos annonces de logement et envoyer des images dans la messagerie.</string>
+	<string>My Home CI accede a vos photos et videos pour illustrer vos annonces de logement, diffuser une publicite video et envoyer des images dans la messagerie.</string>
 
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>My Home CI enregistre dans votre galerie les photos que vous choisissez de telecharger depuis une annonce.</string>
@@ -75,12 +75,10 @@
 	<string>My Home CI peut utiliser Face ID pour securiser l'acces a votre compte.</string>
 
 	<!-- ═══ Schemas d'URL ══════════════════════════════════════════════════
-	     ⚠️ A COMPLETER : le schema de connexion Google est le REVERSED_CLIENT_ID
-	     figurant dans ios/Runner/GoogleService-Info.plist. Il n'apparait dans
-	     ce fichier qu'une fois le fournisseur Google active dans la console
-	     Firebase (Authentication > Sign-in method > Google), puis le plist
-	     retelecharge. Sans ce schema, la connexion Google ouvre Safari et n'en
-	     revient jamais. -->
+	     Le second schema est le REVERSED_CLIENT_ID de
+	     ios/Runner/GoogleService-Info.plist. Sans lui, la connexion Google
+	     ouvre Safari et n'en revient jamais : le systeme ne sait pas a quelle
+	     application rendre la main. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -89,6 +87,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.myhomeci.app</string>
+				<string>com.googleusercontent.apps.735118521165-t1tlmuqgd0j2i2665ia3v8rubs76p3fg</string>
 			</array>
 		</dict>
 	</array>
